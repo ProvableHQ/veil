@@ -24,6 +24,22 @@ function passwordFromEnvironment(): string | undefined {
 }
 
 /**
+ * Names the Keychain entry that holds the saved password of one encrypted file.
+ *
+ * The entry belongs to a file, not to an address: two encrypted files can hold
+ * the same account under different passwords, and each needs its own saved
+ * password. The salt is unique to each encryption, so it identifies the file,
+ * and it changes whenever the file is encrypted again.
+ *
+ * @param address Aleo address of the account.
+ * @param salt The file's scrypt salt, as standard base64.
+ * @returns The entry's account: the address, `-`, and the salt in hex.
+ */
+export function passwordEntryAccount(address: string, salt: string): string {
+  return `${address}-${Buffer.from(salt, 'base64').toString('hex')}`
+}
+
+/**
  * Converts a password to the form stored in the Keychain.
  *
  * @param password Normalised password bytes.
@@ -70,7 +86,7 @@ export async function unlock(
   if (fromEnvironment !== undefined) return attempt(normalizePassword(fromEnvironment))
 
   if (keychainAvailable()) {
-    const saved = await readKeychain(PASSWORD_SERVICE, subject.address)
+    const saved = await readKeychain(PASSWORD_SERVICE, passwordEntryAccount(subject.address, key.kdfParams.salt))
     if (saved !== undefined) {
       // A saved password is the hex of its bytes; anything else was not
       // written by the keystore.

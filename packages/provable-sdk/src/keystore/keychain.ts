@@ -4,7 +4,10 @@ import { runtime } from './runtime.js'
 /** Keychain service holding private keys; the entry's account is the address. */
 export const KEY_SERVICE = 'aleo-account-key'
 
-/** Keychain service holding saved passwords; the entry's account is the address. */
+/**
+ * Keychain service holding saved passwords. The entry's account names one
+ * encrypted file: the address followed by the file's salt.
+ */
 export const PASSWORD_SERVICE = 'aleo-account-password'
 
 /** Exit status `security` returns when the requested entry does not exist. */
@@ -15,6 +18,12 @@ const ITEM_NOT_FOUND_STATUS = 44
  * Addresses, private keys and hex strings all satisfy it.
  */
 const UNQUOTED = /^[A-Za-z0-9]+$/
+
+/**
+ * Entry accounts that can be placed on a `security -i` command line without
+ * quoting: an address, optionally followed by `-` and a salt in hex.
+ */
+const ENTRY_ACCOUNT = /^[A-Za-z0-9]+(?:-[0-9a-f]+)?$/
 
 /** Account names as they may appear, unquoted, in an entry's label. */
 const LABEL_NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/
@@ -87,29 +96,40 @@ export async function readKeychain(service: string, address: string): Promise<st
  * in the process arguments. The entry is read back afterwards to confirm it
  * holds the value.
  *
- * The entry is found by service and address. Its label, the name Keychain
+ * The entry is found by service and account. Its label, the name Keychain
  * Access shows, is `<service>:<name>`, so entries of several accounts can be
  * told apart; the label takes no part in finding the entry.
  *
+ * An entry may be shared: every account file that holds the same key in the
+ * Keychain points at one entry. The existing entry is therefore read first,
+ * and one that already holds the value is left as it is.
+ *
  * @param service Keychain service name.
- * @param address Aleo address, used as the entry's account.
+ * @param address The entry's account: an Aleo address, or an address followed
+ *   by `-` and a salt in hex.
  * @param value Secret to store. MUST be ASCII letters and digits only.
  * @param name Account name, shown in the entry's label.
+ * @returns True when this call created the entry; false when an entry already
+ *   existed. Only an entry a caller created is the caller's to remove if a
+ *   later step fails.
  * @throws KeystoreError `KEYCHAIN_FAILED` when the tool fails or the entry does
  *   not hold the value afterwards.
  */
-export async function writeKeychain(service: string, address: string, value: string, name: string): Promise<void> {
+export async function writeKeychain(service: string, address: string, value: string, name: string): Promise<boolean> {
   // Nothing here is quoted, so anything able to split or extend the command
   // line is refused before the tool runs.
-  if (!UNQUOTED.test(address) || !UNQUOTED.test(value) || !LABEL_NAME.test(name)) {
+  if (!ENTRY_ACCOUNT.test(address) || !UNQUOTED.test(value) || !LABEL_NAME.test(name)) {
     throw failed('writing', service, address, 'was not run, because the value cannot be passed unquoted,')
   }
+  const existing = await readKeychain(service, address)
+  if (existing === value) return false
   const command = `add-generic-password -U -s ${service} -a ${address} -l ${service}:${name} -w ${value}\n`
   const { status } = await runtime.security(['-i'], command)
   if (status !== 0) throw failed('writing', service, address, exitReason(status))
   if ((await readKeychain(service, address)) !== value) {
     throw failed('verifying', service, address, 'did not store the value')
   }
+  return existing === undefined
 }
 
 /**

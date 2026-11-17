@@ -155,8 +155,10 @@ The password of an encrypted account comes from the first of:
 
 1. The `password` option.
 2. `ALEO_ACCOUNT_PASSWORD`.
-3. The macOS Keychain (generic password `aleo-account-password` for the
-   address), when the password was stored with `savePassword: true`.
+3. The macOS Keychain, when `savePassword` put it there. Each encrypted file
+   has its own entry under `aleo-account-password`, named after the address
+   and the file's salt, so two files that hold one account under different
+   passwords do not share a saved password.
 4. A hidden prompt on the terminal, when standard input and standard error are
    both terminals and `prompt` is not `false`.
 
