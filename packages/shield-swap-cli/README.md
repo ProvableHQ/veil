@@ -13,6 +13,8 @@ name:
 ```sh
 npm install -g @provablehq/shield-swap-cli
 
+shield-swap account create --storage encrypted
+shield-swap setup
 shield-swap pools
 shield-swap swap --from USDCx --to ETH --amount 1.5 --execute
 ```
@@ -22,9 +24,14 @@ Or keep it in the project and go through the local bin:
 ```sh
 npm install --save-dev @provablehq/shield-swap-cli
 
-npx shield-swap setup --new
+npx shield-swap account create --storage encrypted
+npx shield-swap setup
 npx shield-swap pools
 ```
+
+For an existing account, use `account import --key-file <path> --storage encrypted`
+in place of `account create`. On macOS, `--storage keychain` is also recommended.
+See [Accounts](#accounts) for storage choices and password handling.
 
 `npx shield-swap` runs the binary that is installed. `npx @provablehq/shield-swap-cli`
 names the package instead, which sends npx to the registry: the version can change
@@ -140,46 +147,109 @@ the Provable API credentials it registers. Reads that touch only mappings
 
 ## Accounts
 
-The private key is not kept in the state directory. `shield-swap` finds it
-through the [account keystore](../provable-sdk/README.md#account-keystore) of
-`@provablehq/veil-aleo-sdk/node`, so the command line and a script built on
-that SDK share one account. Every command that signs resolves the key in this
-order:
+Save an Aleo account once to use the same address across Shield Swap commands
+and Veil scripts without passing its private key on every run. Import an
+existing key or recovery phrase to continue using that account and its funds.
+Create a new account when a separate address is needed.
+
+Accounts are stored by name in `~/.aleo/accounts/<name>.json` through the
+[Veil account keystore](../provable-sdk/README.md#account-keystore). The name
+selects the account; the storage option determines how its private key is kept.
+
+### Choose how to protect the key
+
+**Use Keychain storage on macOS or encrypted storage to protect a saved key.**
+Plaintext is the default when `--storage` is omitted, so select one of these
+options explicitly when creating or importing an account.
+
+| Storage | Where the private key is kept | What that means for using or backing up the account |
+| --- | --- | --- |
+| `keychain` | In the macOS Keychain. The account file contains a reference to it. | Recommended on macOS. The account file alone cannot restore the key on another machine; keep a separate key or recovery phrase backup. |
+| `encrypted` | Encrypted with a password inside the account file. | Recommended when the key should remain in a file. Restoring from a copy of the file also requires the password. |
+| `plaintext` | As readable text inside the account file. | Anyone who can read the file can use the account. File permissions restrict local access but do not encrypt copied files or backups. |
+
+The account's address remains readable with all three options. Encryption
+protects the private key. Plaintext is suitable for disposable test accounts
+whose keys do not need to remain secret.
+
+For a new account, create it with protected storage, then prepare it for trading:
+
+```sh
+shield-swap account create --name trading --storage encrypted
+shield-swap setup --name trading
+```
+
+For an existing account, replace the first command with an import:
+
+```sh
+shield-swap account import --name trading --key-file key.txt --storage encrypted
+```
+
+On macOS, `--storage keychain` can replace `--storage encrypted` in either
+command. Import does not delete the source file; a readable key left in
+`key.txt` still needs protection.
+
+An encrypted account needs its password when a command loads the key. Enter
+it at the hidden prompt or supply it through `ALEO_ACCOUNT_PASSWORD`. On
+macOS, `--save-password` can keep the password in the Keychain for subsequent
+runs. An unattended job needs the environment variable or a saved password
+because it cannot answer a prompt.
+
+### Protect an account already saved in plaintext
+
+Change the storage without changing the address or moving funds:
+
+```sh
+shield-swap account protect --name trading --storage encrypted
+```
+
+Use `--storage keychain` on macOS to move the key into the Keychain instead.
+The command updates the account file; plaintext copies in other files or
+backups remain unchanged. If the key is still in `state.json`, migrate it with
+`shield-swap account migrate --storage encrypted --remove-legacy-key` to save
+it in an encrypted account file and remove the source copy.
+
+Setup's `--new` and `--private-key-file` options create plaintext account files.
+For protected storage from the start, use `account create` or `account import`
+as shown above. `setup` stops with `NEEDS_CONFIG_DECISION` (exit 2) when no key
+is available and `--new` is absent.
+
+### Select the account for a session
+
+Use `setup --name <name>` to select a saved account. Otherwise, the account
+name comes from `ALEO_ACCOUNT`, then the name recorded in `state.json`, then
+`default`. The `account` commands use `--name`, then `ALEO_ACCOUNT`, then
+`default`; they do not read the session's saved name. `ALEO_ACCOUNTS_DIR`
+selects an accounts directory other than `~/.aleo/accounts`.
+
+An account can be used on testnet and mainnet. Create separate named accounts
+when the two networks should use different keys. A second account on the same
+network also needs a separate session directory (`SHIELD_SWAP_STATE_DIR`).
+
+Trading sessions look for the signing key in this order:
 
 1. `ALEO_PRIVATE_KEY`, then its alias `SHIELD_SWAP_PRIVATE_KEY`.
 2. The file named by `ALEO_PRIVATE_KEY_FILE`, then its alias
    `SHIELD_SWAP_PRIVATE_KEY_FILE`: a text file holding only the key.
-3. The account file, `~/.aleo/accounts/<name>.json`. `ALEO_ACCOUNTS_DIR` names
-   another directory.
-4. A key still held by a `state.json` that an earlier version wrote.
+3. The account file, `~/.aleo/accounts/<name>.json`.
+4. A key stored directly in `state.json`.
 
 A key from the environment is used for that run and is never written to disk.
 A variable that is set but empty is an error, and so are two variables that
 hold different keys. The resolved key MUST derive the address recorded in
 `state.json`: a mismatch stops the command and names both addresses.
 
-The account name comes from `--name` (on `setup` and `shield-swap account`),
-then `ALEO_ACCOUNT`, then the name recorded in `state.json`, then `default`. An
-account file is not tied to a network, so one account can serve testnet and
-mainnet; named accounts keep them apart. A second account uses a second state
-directory (`SHIELD_SWAP_STATE_DIR`).
-
-`setup --new` generates an account and stores it in the account file, and
-`setup --private-key-file <path>` stores the key of that file there. Both write
-plaintext storage: a file only its owner can read. `setup` stops with
-`NEEDS_CONFIG_DECISION` (exit 2) when it finds no key and `--new` is absent.
-
 ### `shield-swap account`
 
 ```sh
-shield-swap account create                        # Generate and store an account.
-shield-swap account create --mnemonic             # Generate an account and display its recovery phrase.
-shield-swap account import --key-file key.txt     # Import a private key.
-shield-swap account import --mnemonic-file phrase.txt --index 0
+shield-swap account create --storage encrypted
+shield-swap account create --mnemonic --storage encrypted
+shield-swap account import --key-file key.txt --storage encrypted
+shield-swap account import --mnemonic-file phrase.txt --index 0 --storage encrypted
 shield-swap account show --json                   # Inspect account details without displaying the key.
 shield-swap account protect --storage encrypted   # Encrypt the stored key with a password.
 shield-swap account export                        # Display the key after terminal confirmation.
-shield-swap account migrate --remove-legacy-key   # Migrate the key and remove it from state.json.
+shield-swap account migrate --storage encrypted --remove-legacy-key
 ```
 
 | Command | Effect |
@@ -196,7 +266,7 @@ shield-swap account migrate --remove-legacy-key   # Migrate the key and remove i
 | `--name <name>` | all | Account name. Defaults to `ALEO_ACCOUNT`, then `default`. |
 | `--dir <path>` | all | Accounts directory. Defaults to `ALEO_ACCOUNTS_DIR`, then `~/.aleo/accounts`. |
 | `--json` | all | One machine-readable object on standard output. |
-| `--storage <type>` | `create`, `import`, `protect`, `migrate` | `plaintext` (the default), `keychain` (macOS) or `encrypted`; `none` on `create` and `import` only, which records the address without the key. |
+| `--storage <type>` | `create`, `import`, `protect`, `migrate` | Prefer `keychain` (macOS) or `encrypted`. `plaintext` is the default for creation, import, and migration; `protect` requires a selection unless only removing a saved password. `none` on `create` and `import` records only the address and requires an external key on each run. |
 | `--save-password` | `create`, `import`, `protect`, `migrate` | Also saves the password of an encrypted account in the macOS Keychain. |
 | `--forget-password` | `protect` | Removes a saved password from the macOS Keychain. |
 | `--mnemonic` | `create` | Derives the key from a new recovery phrase. |
@@ -208,10 +278,8 @@ shield-swap account migrate --remove-legacy-key   # Migrate the key and remove i
 | `--network <network>` | `migrate` | Selects that `state.json`: `testnet` (the default) or `mainnet`. |
 | `--remove-legacy-key` | `migrate` | Strips the key from the legacy file after the new account file is read back. |
 
-The password of an encrypted account is never a command-line argument. It
-comes from `ALEO_ACCOUNT_PASSWORD`, a password saved in the macOS Keychain, or
-a hidden prompt. An unattended job needs the variable or the saved password,
-since it cannot answer a prompt.
+Passwords are never command-line arguments. Use the hidden prompt,
+`ALEO_ACCOUNT_PASSWORD`, or a password saved in the macOS Keychain.
 
 `export`, `create --storage none` and `create --mnemonic` show a secret. They
 run only with a terminal on standard input, output and error, and they refuse
@@ -252,8 +320,8 @@ at `shield-swap account migrate`. To move the key into an account file and
 strip it from the state:
 
 ```sh
-shield-swap account migrate --remove-legacy-key
-shield-swap account migrate --network mainnet --name mainnet --remove-legacy-key
+shield-swap account migrate --storage encrypted --remove-legacy-key
+shield-swap account migrate --network mainnet --name mainnet --storage encrypted --remove-legacy-key
 ```
 
 Three behaviours differ from earlier versions:
@@ -301,9 +369,9 @@ combined. If no code can be issued, the command reports an error.
 
 ## A suggested order
 
-1. **`shield-swap setup --new`** — once. It stores a new account, ends by
-   telling you the account is ready, and on testnet it draws funds and waits
-   for the records to land.
+1. **Create or import a protected [account](#accounts), then run `shield-swap setup`.**
+   Setup prepares API access and, on testnet, requests funds for an empty account.
+   Prefer `--storage keychain` on macOS or `--storage encrypted` when saving the key.
 2. **`shield-swap balances`** — confirm what arrived. Nothing below works until
    this shows a private balance.
 3. **`shield-swap pools`** — see what can be traded and how deep it is. Note the
@@ -354,10 +422,10 @@ a state file from an earlier version still holds a private key until
 `shield-swap account migrate --remove-legacy-key` strips it. Set
 `SHIELD_SWAP_STATE_DIR` to keep the state somewhere else.
 
-The key itself is in the account file, `~/.aleo/accounts/<name>.json`, which
-only its owner can read. `shield-swap account protect` moves it into the macOS
-Keychain or encrypts it under a password. Either protects a copied file, a
-backup or a synced folder. Neither stops a process running as the same user.
+Protect saved keys with Keychain or encrypted storage as described in
+[Choose how to protect the key](#choose-how-to-protect-the-key). A plaintext
+account file contains a usable private key. Changing its storage does not
+protect plaintext copies already present in backups or other files.
 
 The state is not shared between testnet and mainnet — not the API grant, and
 above all not the blinded identity store, whose reservations are only meaningful

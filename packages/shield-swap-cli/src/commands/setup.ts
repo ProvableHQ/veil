@@ -1,15 +1,17 @@
 /**
- * Configures a Shield Swap account, authenticates with the DEX API, and requests testnet funds.
+ * Prepares an Aleo account to trade on Shield Swap.
  *
- * Reuses completed setup steps when run again. Use `--private-key-file` to
- * import an account or `--new` to generate one. Both save the key in an account
- * file, normally `~/.aleo/accounts/<name>.json`. Keys supplied through
+ * Run after creating or importing an account to obtain DEX API access and,
+ * on testnet, request funds when the account is empty. Re-running setup reuses
+ * saved progress, including any pending airdrop, so an interrupted setup can
+ * be continued with the same command.
+ *
+ * Prefer an account created with `account create --storage keychain` on macOS
+ * or `account create --storage encrypted`, then select it with `--name`.
+ * An existing account can be imported with the same storage options. Setup's
+ * own `--new` and `--private-key-file` options write readable plaintext keys;
+ * use `account protect` to protect those files. Keys supplied through
  * `ALEO_PRIVATE_KEY` or `ALEO_PRIVATE_KEY_FILE` are used without being saved.
- * Do not put private keys in command arguments or conversations.
- *
- * After loading the account, setup authenticates, redeems an invite code if
- * required, creates a long-lived API token, and requests an airdrop on testnet
- * when balances are empty. It polls for the funds before reporting readiness.
  *
  * Saves the address, account name, and DEX credentials in
  * `./.shield-swap/<network>/state.json`. Preserves any private key already
@@ -24,10 +26,8 @@
  * 3 while an airdrop is pending, and 1 for other failures.
  *
  * @example
- * shield-swap setup --new --name trading
- * shield-swap setup --private-key-file /path/to/key.txt
- * shield-swap setup --network mainnet
- * shield-swap setup --invite-code CODE
+ * shield-swap account create --name trading --storage encrypted
+ * shield-swap setup --name trading
  */
 import { readFileSync } from 'node:fs'
 import { help } from '../color.js'
@@ -60,8 +60,16 @@ A private key is NEVER pasted into a conversation or command history: write it
 to a file and pass --private-key-file, or export ALEO_PRIVATE_KEY or
 ALEO_PRIVATE_KEY_FILE in your own shell. A generated or imported key is stored
 in the account file (~/.aleo/accounts/<name>.json); a key from the environment
-is used for the run and never stored. shield-swap account manages the account
-file. Other environment fallbacks: SHIELD_SWAP_INVITE_CODE, SHIELD_SWAP_API_URL.
+is used for the run and never stored.
+
+Setup saves generated or imported keys as readable plaintext. For protected
+storage, create the account first:
+  shield-swap account create --name trading --storage encrypted
+  shield-swap setup --name trading
+Use account import --key-file <path> in place of account create for an existing
+key. On macOS, --storage keychain is also recommended. For an existing plaintext
+account, run shield-swap account protect --storage encrypted or --storage keychain.
+Other environment fallbacks: SHIELD_SWAP_INVITE_CODE, SHIELD_SWAP_API_URL.
 
 Exit codes: 0 ready · 2 needs input from the user · 3 airdrop still pending ·
 1 anything else.`

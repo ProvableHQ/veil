@@ -1,24 +1,29 @@
 /**
- * Manages Aleo accounts with `shield-swap account`.
+ * Saves an Aleo account for reuse across Shield Swap commands and Veil scripts.
  *
- * Use `create` or `import` to save an account, `show` to inspect its address
- * and storage, `protect` to change storage, `export` to display the private
- * key, and `migrate` to copy a key from a state or profile file. These commands
- * do not contact the network or move funds.
+ * Import an existing private key or recovery phrase to keep using the same
+ * address and funds. Create an account when a separate address is needed.
+ * Once saved, the account can be selected by name without supplying its
+ * private key on every run.
  *
- * Account files default to `~/.aleo/accounts/<name>.json`. Passwords come
- * from `ALEO_ACCOUNT_PASSWORD`, the macOS Keychain, or a hidden prompt.
+ * Use `--storage keychain` on macOS or `--storage encrypted` to protect the
+ * private key. Keychain storage keeps the key in the macOS Keychain, outside
+ * the account file. Encrypted storage keeps a password-encrypted copy in the
+ * file, so the password is needed to unlock it. The default, `plaintext`,
+ * writes the key directly into the file: anyone who can read that file can
+ * use the account. File permissions restrict access but do not encrypt copies
+ * or backups.
  *
- * `export`, `create --storage none`, and `create --mnemonic` display secrets.
- * They require a terminal and reject `--json`. Other results contain the
- * account name, address, storage type, and file path.
+ * For an account already saved in plaintext, use `protect --storage keychain`
+ * or `protect --storage encrypted`. This changes how the key is stored;
+ * the address and funds stay the same. A key still in a Shield Swap state
+ * file can be moved with `migrate --storage encrypted --remove-legacy-key`.
+ * Without the removal flag, the state file retains a readable copy.
  *
- * Keystore errors use `<CODE>: <message>` on standard error. With `--json`,
- * results and keystore errors are JSON objects on standard output. Prompts,
- * notices, usage errors, and other failures go to standard error.
- *
- * Exit codes: 0 for success, 1 for failure, 2 for missing account credentials
- * or a required terminal, and 64 for invalid arguments.
+ * Account files live in `~/.aleo/accounts/<name>.json` by default. Use `show`
+ * to check the address and storage before trading. Use `export` at a terminal
+ * to back up the key or import it into a wallet. These commands do not submit
+ * transactions; run `shield-swap setup` to prepare the account for trading.
  */
 import { readFileSync, realpathSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -44,9 +49,17 @@ import { existingStatePath, statePath, stateFiles, writeStateFile } from '../sta
 import { terminal } from '../terminal.js'
 
 /** Describes account commands and options for help and usage errors. */
-const USAGE = `shield-swap account — store an Aleo account on this machine and inspect it
+const USAGE = `shield-swap account — save an Aleo account for trading and scripts
 
 Usage: shield-swap account <command> [options]
+
+Import an existing key or recovery phrase to keep the same address and funds.
+Create an account when a separate address is needed.
+
+Use --storage keychain on macOS or --storage encrypted to protect the key.
+Keychain keeps the key outside the account file; encrypted storage requires
+a password to unlock the key in the file. The default is plaintext: anyone
+who can read the account file can use its private key.
 
   create     generate a key and store it
   import     store an existing key, or the account of a recovery phrase
@@ -175,7 +188,9 @@ const COMMAND_STORAGE: Partial<Record<CommandName, readonly AccountStorage[]>> =
  *   Commands that display secrets reject this option.
  * @property storage Optional key storage. Defaults to `plaintext` for `create`,
  *   `import`, and `migrate`. Required for `protect` unless only removing a
- *   saved password.
+ *   saved password. Prefer `keychain` on macOS or `encrypted` to avoid a
+ *   readable private key in the account file. `none` saves only the address
+ *   and requires an external key on each run.
  * @property savePassword Saves an encrypted account's password in the macOS
  *   Keychain for subsequent runs. Defaults to false.
  * @property forgetPassword Removes the password saved in the macOS Keychain.
@@ -539,12 +554,17 @@ async function accountToImport(args: Args): Promise<{ address: string; privateKe
 }
 
 /**
- * Generates an Aleo account and saves it using the selected storage.
+ * Creates a new Aleo address and saves its private key for later use.
  *
- * Defaults to plaintext storage. `--mnemonic` displays a new recovery phrase;
- * `--storage none` saves only the address and displays the private key. Both
- * require a terminal and reject JSON output. Encrypted storage may prompt
- * for a password; Keychain storage accesses the macOS Keychain.
+ * Use when a separate account is needed; use `import` to continue with an
+ * existing address and its funds. Choose `--storage keychain` on macOS or
+ * `--storage encrypted` to protect the key. Omitting `--storage` saves the
+ * key as readable text in the account file.
+ *
+ * Add `--mnemonic` to obtain a recovery phrase for restoring the account in
+ * a wallet. The phrase is displayed once and is not saved. With `--storage
+ * none`, only the address is saved, so the displayed private key must be
+ * retained separately. Both options require a terminal and reject JSON output.
  *
  * @param args Account location, storage, and recovery phrase options.
  * @returns Exit code 0 after saving the account and printing its details.
@@ -602,11 +622,17 @@ async function create(args: Args): Promise<number> {
 }
 
 /**
- * Saves an existing private key or an account derived from a recovery phrase.
+ * Makes an existing Aleo account available to Shield Swap commands and scripts.
  *
- * Reads a file, environment variables, or hidden terminal input. Prints the
- * saved account details without displaying the key or phrase. Saving the same
- * account with the same storage succeeds without replacing it.
+ * Import a key or recovery phrase to keep using the account's address and
+ * funds. Supply a file, set a key environment variable, or enter the secret
+ * at the hidden prompt. For a recovery phrase, the account index and
+ * derivation path must match those used by the original wallet.
+ *
+ * Prefer `--storage keychain` on macOS or `--storage encrypted`; the default
+ * stores the private key as readable text. Only the derived key is saved,
+ * not the recovery phrase. Import leaves the source file unchanged, so an
+ * unencrypted key or phrase in that file still needs protection.
  *
  * @param args Import source, account location, derivation, and storage options.
  * @returns Exit code 0 after saving the account and printing its details.
@@ -629,7 +655,9 @@ async function importAccount(args: Args): Promise<number> {
 /**
  * Prints an account's name, address, storage type, and file path.
  *
- * Reads the account file without decrypting its key or asking for a password.
+ * Use before trading to confirm the selected address and check whether its
+ * key uses plaintext, encrypted, or Keychain storage. No password is needed,
+ * and the private key is not displayed.
  *
  * @param args Account location and text or JSON output selection.
  * @returns Exit code 0 after printing the account details.
@@ -690,15 +718,18 @@ function warnLegacyCopies(stored: StoredAccount, args: Args): void {
 }
 
 /**
- * Changes account storage or removes a password saved in the macOS Keychain.
+ * Changes how an existing account's private key is protected without changing its address.
  *
- * `--storage` selects plaintext, Keychain, or encrypted storage. Stored data
- * is verified before the previous copy is removed. Selecting encrypted storage
- * for an encrypted account changes its password.
+ * Use `--storage keychain` on macOS or `--storage encrypted` to replace a
+ * readable key in an account file with protected storage. Keychain keeps the
+ * key outside the file; encryption requires a password to read it. Selecting
+ * `plaintext` makes the key readable in the file again. These changes do not
+ * move funds, and copies in other files or backups are not changed.
  *
- * `--forget-password` alone removes the saved password without changing it.
- * The current password must come from `ALEO_ACCOUNT_PASSWORD` or a hidden
- * prompt. Plaintext copies in state or profile files remain unchanged.
+ * For an encrypted account, `--storage encrypted` sets a new password.
+ * Use `--forget-password` alone to keep the password but remove its saved
+ * Keychain copy, so later runs must obtain it from the environment or a
+ * prompt. Removing the saved copy also requires the current password.
  *
  * @param args Account location, storage, and password saving options.
  * @returns Exit code 0 after the update, or if the account uses storage that
@@ -758,10 +789,12 @@ async function protect(args: Args): Promise<number> {
 }
 
 /**
- * Displays a stored private key after terminal confirmation.
+ * Displays a stored private key for backup or import into another wallet.
  *
- * Requires terminal input and output and rejects JSON output. Unlocking the
- * account may access the macOS Keychain or prompt for a password.
+ * Requires confirmation at a terminal because anyone with the key can use
+ * the account. Encrypted accounts must be unlocked before the key is shown.
+ * Redirected output and JSON output are refused to avoid exposing the key
+ * in a file, pipe, or automation log.
  *
  * @param args Account location and output options.
  * @returns Exit code 0 after printing the key, or 1 if confirmation is declined.
@@ -829,12 +862,17 @@ function ownStatePath(network: string | undefined): string {
 }
 
 /**
- * Copies a private key from a state or profile file into an account file.
+ * Imports an account from a Shield Swap state or profile file without changing its address.
  *
- * Reads `--from`, or the selected network's Shield Swap state file. Removes
- * the source key only with `--remove-legacy-key`, after verifying the stored
- * account. Recognized Shield Swap state files also receive the account name
- * and any missing address for subsequent sessions.
+ * Use when the private key is still stored in `state.json` or `profile.json`.
+ * The address and funds stay the same. Choose `--storage keychain` on macOS
+ * or `--storage encrypted` and add `--remove-legacy-key` to remove the readable
+ * source copy after the saved key has been verified. Without that flag,
+ * protecting the new account file leaves the source key exposed.
+ *
+ * Reads the selected network's state file unless `--from` names another file.
+ * Recognized Shield Swap state files are updated to select the migrated
+ * account on subsequent runs.
  *
  * @param args Source file, destination account, storage, and key removal options.
  * @returns Exit code 0 after saving the account and reporting the source key status.
@@ -880,11 +918,11 @@ const HANDLERS: Record<CommandName, (args: Args) => Promise<number>> = {
 }
 
 /**
- * Runs an account command and prints its result.
+ * Provides account creation, import, and key protection through the CLI.
  *
- * Commands can read or write account files, access the macOS Keychain, and
- * prompt for input. Commands that display secrets require a terminal and
- * reject JSON output. No network requests are made.
+ * Scripts can use `--json` to read account details and keystore errors.
+ * Commands that display a private key or recovery phrase require a terminal
+ * and reject JSON output. No transactions are submitted by these commands.
  *
  * Sets `process.exitCode` to 1 on failure or 2 when account credentials or a
  * required terminal are missing. Invalid arguments print usage and exit

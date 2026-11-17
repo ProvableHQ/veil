@@ -220,11 +220,14 @@ export function namedAmounts(params: {
 }
 
 /**
- * Creates a client that signs with the saved account and authenticates with Shield Swap.
+ * Opens the CLI's trading account for use in a Veil script.
  *
- * Requires session state from `shield-swap setup`. The signing key must match
- * the saved address. Looks for the key in environment variables, the account
- * file, then the state file. Reading stored keys may prompt for a password.
+ * Run `shield-swap setup` first, then call this helper to trade with the same
+ * address and retain swap recovery data between the CLI and the script.
+ * The saved address is checked against the resolved key to prevent signing
+ * with a different account. An encrypted account may prompt for its password;
+ * unattended scripts need a password source such as `ALEO_ACCOUNT_PASSWORD`
+ * or a password saved in the macOS Keychain.
  *
  * Authenticates with the DEX API on each call and opens the network's blinded
  * identity store for swap reservations and recovery. If `VEIL_INVENTORY_DB`
@@ -319,17 +322,18 @@ export async function pollUntil(fn: () => Promise<boolean>, attempts: number, in
 }
 
 /**
- * Selects a signing account and saves its address and account name in session state.
+ * Sets up a Shield Swap session to use an existing or newly created account.
  *
  * Use `importKey` to save an existing key or `allowGenerate` to create an
  * account when no key is available. Otherwise, uses the environment, account
  * file, or key in the state file. An existing session cannot switch addresses.
  *
- * New account files use plaintext storage with mode 0600. Use `shield-swap
- * account protect` to select encryption or the macOS Keychain. Environment
- * keys are not copied to disk, and keys already in the state file are preserved.
- * Loading a protected account may prompt for a password. No network requests
- * are made.
+ * Prefer creating or importing a protected account with `shield-swap account`
+ * before calling this helper. New account files written here use plaintext:
+ * anyone who can read the file can use its key. Use `account protect --storage
+ * keychain` on macOS or `--storage encrypted` to protect an existing file.
+ * Environment keys are not copied to disk, and keys already in the state file
+ * are preserved. Loading an encrypted account may prompt for a password.
  *
  * @param state Session state to update in place and save.
  * @param options Optional key import, generation, and account selection.
