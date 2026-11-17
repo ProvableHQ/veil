@@ -151,6 +151,8 @@ export function readHidden(
  *   standard input and standard error are both terminals.
  * @property promptHidden Asks for one line on the terminal without echo.
  * @property notify Writes one line to the terminal, never to standard output.
+ * @property lockWaitMs How long a caller waits for another process to finish
+ *   changing an account file before giving up, in milliseconds.
  */
 export type KeystoreRuntime = {
   platform: NodeJS.Platform
@@ -159,6 +161,7 @@ export type KeystoreRuntime = {
   terminalAttached: () => boolean
   promptHidden: (message: string) => Promise<string>
   notify: (message: string) => void
+  lockWaitMs: number
 }
 
 /** The live facilities: the real platform, Keychain tool and terminal. */
@@ -171,4 +174,5 @@ export const runtime: KeystoreRuntime = {
   notify: (message) => {
     process.stderr.write(`${message}\n`)
   },
+  lockWaitMs: 10_000,
 }

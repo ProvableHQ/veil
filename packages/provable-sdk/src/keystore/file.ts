@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { chmod, link, mkdir, open, rename, unlink } from 'node:fs/promises'
+import { chmod, link, mkdir, open, rename, stat, unlink } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import {
   SALT_BYTES,
@@ -336,6 +336,66 @@ export async function writeFileExclusive(path: string, data: string | Uint8Array
     }
   } finally {
     await unlink(temporary).catch(() => undefined)
+  }
+}
+
+/** How often a waiting caller looks at a held lock again, in milliseconds. */
+const LOCK_POLL_MS = 50
+
+/**
+ * Holds the interprocess lock of one account file while changing it.
+ *
+ * Changing how an account file holds its key reads the file, writes a new one,
+ * removes the old secret, and puts the old file back if a step fails. Two
+ * processes doing that to one file at once could each undo the other's work,
+ * and leave a file that points at a secret the other has removed. The lock
+ * lets one of them through at a time.
+ *
+ * The lock is a file next to the account file, `<name>.json.lock`, created
+ * exclusively and removed when the action settles. A caller that finds it held
+ * waits, looking again at short intervals, and gives up after the runtime's
+ * `lockWaitMs`.
+ *
+ * A lock is never removed on another caller's behalf, however old it is:
+ * deciding that a lock is abandoned and removing it cannot be done in one
+ * step, so two waiting callers could both remove it and both go ahead. A lock
+ * left by a process that was killed stays until a person removes it, and the
+ * error says which file that is.
+ *
+ * @param location The account file to lock. Its directory MUST exist.
+ * @param action The change to make while the lock is held.
+ * @returns What the action returns.
+ * @throws KeystoreError `ACCOUNT_BUSY` when the lock is still held after the
+ *   wait. Errors of the action propagate after the lock is released.
+ */
+export async function withAccountLock<T>(location: Location, action: () => Promise<T>): Promise<T> {
+  const path = `${location.path}.lock`
+  const deadline = Date.now() + runtime.lockWaitMs
+  for (;;) {
+    try {
+      await (await open(path, 'wx', 0o600)).close()
+      break
+    } catch (cause) {
+      const code = (cause as { code?: string } | undefined)?.code
+      // Windows reports a file that is being deleted as a permission error.
+      const pendingDelete = runtime.platform === 'win32' && code === 'EPERM'
+      if (code !== 'EEXIST' && !pendingDelete) throw cause
+      if (Date.now() >= deadline) {
+        // A permission error with no lock file behind it is a real one.
+        if (pendingDelete && !(await stat(path).then(() => true, () => false))) throw cause
+        throw new KeystoreError(
+          'ACCOUNT_BUSY',
+          `Another process is changing account file ${location.path}. Try again when it has finished. ` +
+            `If no other process is using the account, remove ${path}.`,
+        )
+      }
+      await new Promise((resolve) => setTimeout(resolve, LOCK_POLL_MS))
+    }
+  }
+  try {
+    return await action()
+  } finally {
+    await unlink(path).catch(() => undefined)
   }
 }
 

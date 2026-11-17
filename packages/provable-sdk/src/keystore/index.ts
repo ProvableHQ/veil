@@ -15,6 +15,7 @@ import {
   STORAGE_TYPES,
   readAccountFile,
   resolveLocation,
+  withAccountLock,
   writeAccountFile,
   writeFileAtomic,
   type AccountFile,
@@ -802,48 +803,64 @@ export async function protectAccount(
   }
   const savePassword = storage === 'encrypted' && options.savePassword === true && keychainAvailable()
 
-  // Every step below is undone together if any of them fails: the original
-  // file goes back, and the Keychain entries this call created are removed.
-  // The old secret is the last thing touched, and it is touched only once
-  // everything else has succeeded, so the original file works again as soon
-  // as it is back in place.
-  const created: KeychainEntry[] = []
-  try {
-    // The new file's saved password has its own entry, named after the new
-    // salt, so the entry of the file being replaced is not disturbed.
-    await writeStorage(location, { privateKey, address }, storage, password, savePassword, { created })
-    // Read the new storage back the way a later load would, then compare.
-    await confirmStored(location, { privateKey, address }, storage, password, false)
+  // One process changes an account file at a time. Passwords were asked for
+  // above, so the lock is held only while files and the Keychain change.
+  await withAccountLock(location, async () => {
+    // The file was read before the lock was taken. If another process has
+    // changed it since, the key and the old secret worked out above belong to
+    // a file that no longer exists, and nothing here is safe to do.
+    const latest = await readAccountFile(location.path)
+    if (!latest || !latest.bytes.equals(existing.bytes)) {
+      throw new KeystoreError(
+        'ACCOUNT_BUSY',
+        `Account file ${location.path} was changed by another process while its storage was being changed. ` +
+          'Nothing was changed here; run the operation again.',
+      )
+    }
 
-    // Only now is the old secret redundant. Each file has entries of its own,
-    // so only a copy of this very file can still point at them; an entry a
-    // copy in the same directory still uses is left in place.
-    const previous = existing.file.key
-    if (previous.type === 'keychain' && storage !== 'keychain') {
-      const entry = previous.account
-      const shared = await neighbourUses(location, (file) => keyOf(file).type === 'keychain' && keyOf(file).account === entry)
-      if (!shared) await deleteKeychain(KEY_SERVICE, entry)
+    // Every step below is undone together if any of them fails: the original
+    // file goes back, and the Keychain entries this call created are removed.
+    // The old secret is the last thing touched, and it is touched only once
+    // everything else has succeeded, so the original file works again as soon
+    // as it is back in place.
+    const created: KeychainEntry[] = []
+    try {
+      // The new file's saved password has its own entry, named after the new
+      // salt, so the entry of the file being replaced is not disturbed.
+      await writeStorage(location, { privateKey, address }, storage, password, savePassword, { created })
+      // Read the new storage back the way a later load would, then compare.
+      await confirmStored(location, { privateKey, address }, storage, password, false)
+
+      // Only now is the old secret redundant. Each file has entries of its own,
+      // so only a copy of this very file can still point at them; an entry a
+      // copy in the same directory still uses is left in place.
+      const previous = existing.file.key
+      if (previous.type === 'keychain' && storage !== 'keychain') {
+        const entry = previous.account
+        const shared = await neighbourUses(location, (file) => keyOf(file).type === 'keychain' && keyOf(file).account === entry)
+        if (!shared) await deleteKeychain(KEY_SERVICE, entry)
+      }
+      if (previous.type === 'encrypted' && keychainAvailable()) {
+        const salt = previous.kdfParams.salt
+        const shared = await neighbourUses(location, (file) => {
+          const key = keyOf(file)
+          const params = key.kdfParams
+          return (
+            file.address === address &&
+            key.type === 'encrypted' &&
+            typeof params === 'object' &&
+            params !== null &&
+            (params as Record<string, unknown>).salt === salt
+          )
+        })
+        if (!shared) await deleteKeychain(PASSWORD_SERVICE, passwordEntryAccount(address, salt))
+      }
+    } catch (error) {
+      await writeFileAtomic(location.path, existing.bytes)
+      await removeEntries(created)
+      throw error
     }
-    if (previous.type === 'encrypted' && keychainAvailable()) {
-      const salt = previous.kdfParams.salt
-      const shared = await neighbourUses(location, (file) => {
-        const key = keyOf(file)
-        const params = key.kdfParams
-        return (
-          file.address === address &&
-          key.type === 'encrypted' &&
-          typeof params === 'object' &&
-          params !== null &&
-          (params as Record<string, unknown>).salt === salt
-        )
-      })
-      if (!shared) await deleteKeychain(PASSWORD_SERVICE, passwordEntryAccount(address, salt))
-    }
-  } catch (error) {
-    await writeFileAtomic(location.path, existing.bytes)
-    await removeEntries(created)
-    throw error
-  }
+  })
 
   return { name: location.name, path: location.path, address, storage }
 }

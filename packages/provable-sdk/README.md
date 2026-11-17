@@ -333,6 +333,7 @@ try {
 | `ACCOUNT_NOT_FOUND` | No source in the lookup order produced a key, or the account file to change or export does not exist. |
 | `KEY_NOT_STORED` | The account file records an address only and no key came from the environment. |
 | `ACCOUNT_EXISTS` | Saving would replace an existing account file. |
+| `ACCOUNT_BUSY` | Another process is changing the account file, or changed it while this operation was in progress. Nothing was changed; try again. |
 | `ADDRESS_MISMATCH` | A key does not derive the address of the account file, the expected address or the Keychain entry. |
 | `KEY_CONFLICT` | Two key variables hold different keys, or a legacy state file holds two different keys. |
 | `EMPTY_KEY_SOURCE` | A key variable is set but empty, or its file is empty or unreadable. |

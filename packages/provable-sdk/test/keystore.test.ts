@@ -9,6 +9,7 @@ import {
   readdirSync,
   rmSync,
   statSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -79,10 +80,11 @@ function fakeSecurity() {
   const entries = new Map<string, string>()
   const labels = new Map<string, string>()
   const calls: Array<{ args: string[]; stdin?: string }> = []
-  let override: ((args: readonly string[]) => { status: number | null; stdout: string } | undefined) | undefined
+  type Forced = { status: number | null; stdout: string } | undefined
+  let override: ((args: readonly string[]) => Forced | Promise<Forced>) | undefined
   const run: SecurityRunner = async (args, stdin) => {
     calls.push({ args: [...args], stdin })
-    const forced = override?.(args)
+    const forced = await override?.(args)
     if (forced) return forced
     if (args.length === 1 && args[0] === '-i') {
       const match = /^add-generic-password -U -s (\S+) -a (\S+) -l (\S+) -w (\S+)\n$/.exec(stdin ?? '')
@@ -1840,6 +1842,89 @@ describe('Keychain entries shared between account files', () => {
     expect(readFileSync(stored.path).equals(bytes)).toBe(true)
     // Only the original key entry is left.
     expect([...security.entries.keys()]).toEqual([keyEntry(stored.path)])
+  })
+})
+
+describe('one process changes an account file at a time', () => {
+  it('does not restore a stale file over a change another process made', async () => {
+    const account = generateAccount()
+    const stored = await saveAccount(account, { dir, storage: 'keychain' })
+    const entry = keyEntry(stored.path)
+    let other: Awaited<ReturnType<typeof protectAccount>> | undefined
+    let interleaved = false
+    security.force(async (args) => {
+      // The first caller reads the key from the Keychain. Before it goes on,
+      // another process moves the same account to plaintext, which removes the
+      // Keychain entry the first caller has just read.
+      if (args[0] === 'find-generic-password' && !interleaved) {
+        // Marked first, so the other process's own Keychain reads pass through.
+        interleaved = true
+        const value = security.entries.get(entry)!
+        other = await protectAccount({ dir, storage: 'plaintext' })
+        return { status: 0, stdout: `${value}\n` }
+      }
+      return undefined
+    })
+    const error = await failure(protectAccount({ dir, storage: 'encrypted', password: PASSWORD, prompt: false }))
+    security.force(undefined)
+    expect(error.code).toBe('ACCOUNT_BUSY')
+    expect(error.message).toContain(stored.path)
+    // The other process's result stands: the stale Keychain pointer was not put back.
+    expect(other?.storage).toBe('plaintext')
+    expect((await accountInfo({ dir }))?.storage).toBe('plaintext')
+    expect(same(await exportAccount({ dir }), account.privateKey)).toBe(true)
+    expect(security.entries.size).toBe(0)
+    expect(readdirSync(dir)).toEqual(['default.json'])
+  })
+
+  it('waits for the lock and gives up with ACCOUNT_BUSY', async () => {
+    const account = generateAccount()
+    const stored = await saveAccount(account, { dir })
+    const bytes = readFileSync(stored.path)
+    const lock = join(dir, 'default.json.lock')
+    writeFileSync(lock, '')
+    runtime.lockWaitMs = 200
+    const error = await failure(protectAccount({ dir, storage: 'encrypted', password: PASSWORD, prompt: false }))
+    expect(error.code).toBe('ACCOUNT_BUSY')
+    expect(error.message).toContain(lock)
+    // Nothing was changed, and the other process's lock was left alone.
+    expect(readFileSync(stored.path).equals(bytes)).toBe(true)
+    expect(existsSync(lock)).toBe(true)
+
+    // Once the lock is released, the same call goes through and leaves no lock behind.
+    rmSync(lock)
+    expect((await protectAccount({ dir, storage: 'encrypted', password: PASSWORD, prompt: false })).storage).toBe('encrypted')
+    expect(readdirSync(dir)).toEqual(['default.json'])
+  })
+
+  it('never removes a lock on its own, however old it is', async () => {
+    const account = generateAccount()
+    const stored = await saveAccount(account, { dir })
+    const bytes = readFileSync(stored.path)
+    const lock = join(dir, 'default.json.lock')
+    writeFileSync(lock, '')
+    const longAgo = new Date(Date.now() - 7 * 24 * 3_600_000)
+    utimesSync(lock, longAgo, longAgo)
+    runtime.lockWaitMs = 200
+    // Two waiting callers that both removed an old lock would both go ahead.
+    const error = await failure(protectAccount({ dir, storage: 'encrypted', password: PASSWORD, prompt: false }))
+    expect(error.code).toBe('ACCOUNT_BUSY')
+    expect(error.message).toContain(lock)
+    expect(existsSync(lock)).toBe(true)
+    expect(readFileSync(stored.path).equals(bytes)).toBe(true)
+  })
+
+  it('releases the lock when the change fails', async () => {
+    const account = generateAccount()
+    const stored = await saveAccount(account, { dir })
+    const bytes = readFileSync(stored.path)
+    security.force((args) => (args[0] === '-i' ? { status: 1, stdout: '' } : undefined))
+    expect(await codeOf(protectAccount({ dir, storage: 'keychain' }))).toBe('KEYCHAIN_FAILED')
+    security.force(undefined)
+    expect(readFileSync(stored.path).equals(bytes)).toBe(true)
+    expect(readdirSync(dir)).toEqual(['default.json'])
+    // The next change is not blocked.
+    expect((await protectAccount({ dir, storage: 'keychain' })).storage).toBe('keychain')
   })
 })
 

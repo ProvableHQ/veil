@@ -5,6 +5,7 @@ export type KeystoreErrorCode =
   | 'ACCOUNT_NOT_FOUND'
   | 'KEY_NOT_STORED'
   | 'ACCOUNT_EXISTS'
+  | 'ACCOUNT_BUSY'
   | 'ADDRESS_MISMATCH'
   | 'KEY_CONFLICT'
   | 'EMPTY_KEY_SOURCE'
@@ -37,6 +38,8 @@ export type KeystoreErrorCode =
  *   - `KEY_NOT_STORED`: the account file records an address only and no key
  *     came from the environment.
  *   - `ACCOUNT_EXISTS`: saving would replace an existing account file.
+ *   - `ACCOUNT_BUSY`: another process is changing the account file, or changed
+ *     it while this operation was in progress. Nothing was changed; try again.
  *   - `ADDRESS_MISMATCH`: a key does not match the account file, the expected
  *     address or the Keychain entry.
  *   - `KEY_CONFLICT`: two environment variables resolve to different keys, or
