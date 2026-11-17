@@ -297,7 +297,10 @@ state directory or in `~/.shield-swap/profile.json`. It reads those files and
 changes nothing; state kept in other directories is not checked.
 
 When the migrated file is one of this command line's own state files, `migrate`
-also records the account name in it. Without `--remove-legacy-key` the legacy
+also records the account name in it. A state or profile file elsewhere, such
+as another project's `state.json`, is left as it is until `--remove-legacy-key`
+strips its key; the command then records the account name in it too, so that
+project still finds the account. Without `--remove-legacy-key` the legacy
 file keeps its key, and the command says so.
 
 Output and exit codes:

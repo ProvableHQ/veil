@@ -887,6 +887,26 @@ async function recordAccount(path: string, account: { name: string; address: str
 }
 
 /**
+ * Reports whether a migration source records the network it is used on.
+ *
+ * Shield Swap state files and profile files do, and both select their account
+ * by the `account` field, so the field can be recorded in them.
+ *
+ * @param path Migration source to read.
+ * @returns True if the file holds a JSON object whose `network` is `testnet`
+ *   or `mainnet`. False if the file cannot be read or parsed.
+ */
+async function namesNetwork(path: string): Promise<boolean> {
+  try {
+    const content: unknown = JSON.parse(await readFile(path, 'utf8'))
+    const network = typeof content === 'object' && content !== null ? (content as { network?: unknown }).network : undefined
+    return network === 'testnet' || network === 'mainnet'
+  } catch {
+    return false
+  }
+}
+
+/**
  * Finds the Shield Swap state path used as the default migration source.
  *
  * @param network Optional network selection. Defaults to `SHIELD_SWAP_NETWORK`,
@@ -909,8 +929,9 @@ function ownStatePath(network: string | undefined): string {
  * protecting the new account file leaves the source key exposed.
  *
  * Reads the selected network's state file unless `--from` names another file.
- * Recognized Shield Swap state files are updated to select the migrated
- * account on subsequent runs.
+ * Records the account name in this directory's state files, so subsequent
+ * runs select the migrated account. A state or profile file elsewhere is
+ * changed only by `--remove-legacy-key`, which also records the name in it.
  *
  * @param args Source file, destination account, storage, and key removal options.
  * @returns Exit code 0 after saving the account and reporting the source key status.
@@ -929,8 +950,11 @@ async function migrate(args: Args): Promise<number> {
     savePassword: args.savePassword,
     removeLegacyKey: args.removeLegacyKey,
   })
-  // Save the account name in recognized state files for subsequent sessions.
-  if (stateFiles().some((path) => canonical(path) === canonical(from))) await recordAccount(from, stored)
+  // Save the account name in this directory's state files for subsequent sessions.
+  const own = stateFiles().some((path) => canonical(path) === canonical(from))
+  // A state or profile file elsewhere is left as it is while it holds its key.
+  // Once the key is removed, its commands find the account only by this name.
+  if (own || (legacyKeyRemoved && (await namesNetwork(from)))) await recordAccount(from, stored)
 
   report(stored, args.json, summary(stored, 'Migrated'))
   storageNotes(stored, args.savePassword)

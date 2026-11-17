@@ -986,6 +986,42 @@ describe('migrate', () => {
     expect(JSON.parse(readFileSync(mainnetState, 'utf8')).account).toBe('named')
   })
 
+  it('records the account name in the state file of another project once its key is removed', async () => {
+    const owner = newAccount()
+    const elsewhere = join(sandbox.root, 'other-project', '.shield-swap', 'testnet', 'state.json')
+    const text = legacyState(elsewhere, owner)
+
+    // While the key remains, that project still signs with it, so its file is left as it is.
+    let outcome = await account('migrate', '--from', elsewhere, '--name', 'trading', '--json')
+    expect(outcome.status).toBe(0)
+    expect(readFileSync(elsewhere, 'utf8') === text).toBe(true)
+
+    // Without the key, that project finds the account only through the recorded name.
+    outcome = await account('migrate', '--from', elsewhere, '--name', 'trading', '--remove-legacy-key', '--json')
+    expect(outcome.status).toBe(0)
+    expect(JSON.parse(readFileSync(elsewhere, 'utf8'))).toEqual({
+      network: 'testnet',
+      address: owner.address,
+      dexApiToken: 'ss_test',
+      account: 'trading',
+    })
+    if (posix) expect(mode(elsewhere)).toBe(0o600)
+    expect((await storedKey('trading')) === owner.privateKey).toBe(true)
+  })
+
+  it('records the account name in a profile file once its key is removed', async () => {
+    const owner = newAccount()
+    const profile = join(sandbox.root, 'profile.json')
+    writeFileSync(
+      profile,
+      JSON.stringify({ address: owner.address, private_key: owner.privateKey, network: 'mainnet' }, null, 2),
+      { mode: 0o600 },
+    )
+    const outcome = await account('migrate', '--from', profile, '--name', 'trading', '--remove-legacy-key', '--json')
+    expect(outcome.status).toBe(0)
+    expect(JSON.parse(readFileSync(profile, 'utf8'))).toEqual({ address: owner.address, network: 'mainnet', account: 'trading' })
+  })
+
   it('records the address when a stripped state held a key without one', async () => {
     const owner = newAccount()
     const state = join(sandbox.stateRoot, 'testnet', 'state.json')
