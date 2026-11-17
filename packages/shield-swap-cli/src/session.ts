@@ -409,8 +409,11 @@ export async function ensureKeyMaterial(
   }
 
   state.address = loaded.account.address
-  // Save an explicit name, but preserve the saved name for environment overrides.
-  if (loaded.stored) state.account = options.name ?? state.account ?? loaded.stored.name
+  // Save an explicit name even before its account file exists: a key from the
+  // environment may be imported under that name later. Preserve the saved name
+  // for environment overrides.
+  if (options.name !== undefined) state.account = options.name
+  else if (loaded.stored) state.account ??= loaded.stored.name
   saveState(state)
   return state
 }

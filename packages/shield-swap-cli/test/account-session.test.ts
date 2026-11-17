@@ -211,6 +211,21 @@ describe('ensureKeyMaterial', () => {
     expect(onDisk(sandbox.root, owner.privateKey)).toBe(false)
   })
 
+  it('records an explicit name for an environment key before its account file exists', async () => {
+    const owner = newAccount()
+    process.env.ALEO_PRIVATE_KEY = owner.privateKey
+    await session.ensureKeyMaterial(session.loadState('testnet'), { name: 'trading' })
+    expect(readState()).toEqual({ network: 'testnet', address: owner.address, account: 'trading' })
+    expect(existsSync(sandbox.dir)).toBe(false)
+
+    // Once the key is imported under that name, commands find it without the variable.
+    await sandbox.keystore.saveAccount(owner, { name: 'trading' })
+    delete process.env.ALEO_PRIVATE_KEY
+    const loaded = await lookup.resolveAccount({ state: session.loadState('testnet') })
+    expect(loaded.account.address).toBe(owner.address)
+    expect(loaded.stored?.name).toBe('trading')
+  })
+
   it('keeps a state file that still holds its key working, and points at migrate once', async () => {
     const owner = newAccount()
     legacyState(owner)
