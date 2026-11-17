@@ -26,6 +26,7 @@ import {
   PASSWORD_SERVICE,
   deleteKeychain,
   keychainAvailable,
+  newKeyEntryAccount,
   readKeychain,
   requireKeychain,
   writeKeychain,
@@ -239,7 +240,7 @@ async function readStoredKey(
         `Account file ${location.path} keeps its key in the Keychain of the Mac it was created on. ` +
           'Export the key on that Mac and import it here.',
       )
-      const value = await readKeychain(KEY_SERVICE, address)
+      const value = await readKeychain(KEY_SERVICE, key.account)
       if (value === undefined) {
         throw new KeystoreError(
           'KEYCHAIN_ITEM_NOT_FOUND',
@@ -272,11 +273,11 @@ async function removeEntries(entries: readonly KeychainEntry[]): Promise<void> {
 /**
  * Reports whether another account file in the same directory matches.
  *
- * Keychain entries can be shared: every account file that holds one key in
- * the Keychain points at the same entry, and a copied encrypted file shares
- * its saved password. Before an entry is removed, the neighbouring files are
- * checked so that one still in use stays. Files that cannot be read or parsed
- * are skipped. Account files in other directories are not seen.
+ * Every account file has Keychain entries of its own, so two files share an
+ * entry only when one is a copy of the other. Before an entry is removed, the
+ * neighbouring files are checked so that an entry a copy still uses stays.
+ * Files that cannot be read or parsed are skipped. A copy kept in another
+ * directory is not seen.
  *
  * @param location The account file being changed; it is not counted itself.
  * @param matches Decides whether a parsed neighbouring file uses the entry.
@@ -322,8 +323,7 @@ function keyOf(file: Record<string, unknown>): Record<string, unknown> {
  * @param options.exclusive Whether the account file must not exist yet.
  *   Defaults to false, which replaces any file at the path.
  * @param options.created Receives each Keychain entry this call creates, so a
- *   caller can remove them when a later step fails. An entry that existed
- *   before the call is not listed: another account file may rely on it.
+ *   caller can remove them when a later step fails.
  * @returns The content written to the account file.
  * @throws The file system error with `code` equal to `'EEXIST'` when
  *   `exclusive` is set and the account file already exists.
@@ -346,10 +346,13 @@ async function writeStorage(
       key = { type: 'plaintext', privateKey }
       break
     case 'keychain':
-      if (await writeKeychain(KEY_SERVICE, address, privateKey, location.name)) {
-        options.created?.push({ service: KEY_SERVICE, account: address })
+      // Each account file gets a Keychain entry of its own, so nothing done
+      // to this file's entry can affect another file that holds the same key.
+      const entry = newKeyEntryAccount(address)
+      if (await writeKeychain(KEY_SERVICE, entry, privateKey, location.name)) {
+        options.created?.push({ service: KEY_SERVICE, account: entry })
       }
-      key = { type: 'keychain', service: KEY_SERVICE, account: address }
+      key = { type: 'keychain', service: KEY_SERVICE, account: entry }
       break
     case 'encrypted': {
       if (!password) throw new KeystoreError('PASSWORD_REQUIRED', `Encrypting the account ${address} needs a password.`)
@@ -462,8 +465,8 @@ async function storeAccount(
   }
   // The file is created exclusively: another process may have stored an
   // account under this name since the check above, and it MUST NOT be replaced.
-  // Only Keychain entries this call creates are undone on failure: an entry
-  // that was already there may be the only stored key of another account file.
+  // Keychain entries are made for this file alone, under names no other file
+  // has, so removing them on failure cannot touch another file's key.
   const created: KeychainEntry[] = []
   try {
     const file = await writeStorage(location, account, storage, password, options.savePassword === true, {
@@ -473,13 +476,12 @@ async function storeAccount(
     return { stored: describe(location, file), password }
   } catch (error) {
     if ((error as { code?: string } | undefined)?.code === 'EEXIST') {
-      const now = await readAccountFile(location.path)
-      // The same account in the same Keychain storage is what was asked for,
-      // and the key entry just written is the one that file points at.
-      if (now && now.file.address === account.address && now.file.key.type === storage && storage !== 'encrypted') {
-        return { stored: describe(location, now.file) }
-      }
+      // The file that won the race has Keychain entries of its own; the ones
+      // made here belong to a file that was never created. They go first, so
+      // nothing below can leave them behind.
       await removeEntries(created)
+      const now = await readAccountFile(location.path)
+      // The same account in the same storage is what was asked for.
       if (now && now.file.address === account.address && now.file.key.type === storage) {
         return { stored: describe(location, now.file) }
       }
@@ -813,12 +815,14 @@ export async function protectAccount(
     // Read the new storage back the way a later load would, then compare.
     await confirmStored(location, { privateKey, address }, storage, password, false)
 
-    // Only now is the old secret redundant. An entry a neighbouring account
-    // file still uses is left in place.
+    // Only now is the old secret redundant. Each file has entries of its own,
+    // so only a copy of this very file can still point at them; an entry a
+    // copy in the same directory still uses is left in place.
     const previous = existing.file.key
     if (previous.type === 'keychain' && storage !== 'keychain') {
-      const shared = await neighbourUses(location, (file) => file.address === address && keyOf(file).type === 'keychain')
-      if (!shared) await deleteKeychain(KEY_SERVICE, address)
+      const entry = previous.account
+      const shared = await neighbourUses(location, (file) => keyOf(file).type === 'keychain' && keyOf(file).account === entry)
+      if (!shared) await deleteKeychain(KEY_SERVICE, entry)
     }
     if (previous.type === 'encrypted' && keychainAvailable()) {
       const salt = previous.kdfParams.salt

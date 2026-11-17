@@ -202,7 +202,7 @@ The `storage` option selects one of four forms:
 | --- | --- | --- |
 | `'plaintext'` | In the account file. | The default. Protected by file permissions only. |
 | `'encrypted'` | In the account file, encrypted under a password. | The password is stretched with scrypt (`N = 131072`, `r = 8`, `p = 1`) before it encrypts the key. Works on every system. |
-| `'keychain'` | In the macOS login keychain, as the generic password `aleo-account-key` for the address, labelled `aleo-account-key:<name>` so Keychain Access shows which account it belongs to. | macOS only. Nothing secret is on disk, and no other copy of the key exists. Elsewhere, saving fails before anything is written and loading fails with `KEYCHAIN_UNAVAILABLE`. |
+| `'keychain'` | In the macOS login keychain, as a generic password under `aleo-account-key`. Each account file has an entry of its own, named after the address and an identifier the file records, and labelled `aleo-account-key:<name>` so Keychain Access shows which account it belongs to. | macOS only. Nothing secret is on disk, and no other copy of the key exists. Elsewhere, saving fails before anything is written and loading fails with `KEYCHAIN_UNAVAILABLE`. |
 | `'none'` | Nowhere. The file records the address only. | The key comes from the environment on every run, and the file confirms it is the expected account. |
 
 A plaintext file, complete:
@@ -219,7 +219,7 @@ A plaintext file, complete:
 ```
 
 The other forms differ in `key` only: `{ "type": "none" }`,
-`{ "type": "keychain", "service": "aleo-account-key", "account": "aleo1..." }`,
+`{ "type": "keychain", "service": "aleo-account-key", "account": "aleo1...-<32 hex characters>" }`,
 and `{ "type": "encrypted", "kdf": "scrypt", "kdfParams": { "N", "r", "p",
 "salt" }, "ciphertext": "ciphertext1..." }`. The file is UTF-8 JSON with
 two-space indentation and one trailing newline. A reader rejects a file with a

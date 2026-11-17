@@ -197,6 +197,16 @@ function put(name: string, content: unknown): string {
   return path
 }
 
+/** The Keychain account of the key entry that one Keychain account file points at. */
+function keyEntryAccount(path: string): string {
+  return (JSON.parse(readFileSync(path, 'utf8')) as { key: { account: string } }).key.account
+}
+
+/** The stand-in Keychain's key for the key entry of one Keychain account file. */
+function keyEntry(path: string): string {
+  return `${KEY_SERVICE} ${keyEntryAccount(path)}`
+}
+
 /** The Keychain account of the saved password that belongs to one encrypted account file. */
 function savedPasswordAccount(path: string): string {
   const file = JSON.parse(readFileSync(path, 'utf8')) as { address: string; key: { kdfParams: { salt: string } } }
@@ -235,16 +245,28 @@ describe('shared sample files', () => {
     }
   })
 
-  it.each(['none', 'plaintext', 'keychain'] as const)('writes the %s sample byte for byte', async (storage) => {
+  it.each(['none', 'plaintext'] as const)('writes the %s sample byte for byte', async (storage) => {
     const stored = await saveAccount(SAMPLE, { dir, name: storage, storage })
     expect(stored).toEqual({ name: storage, path: join(dir, `${storage}.json`), address: SAMPLE.address, storage })
     const written = readFileSync(stored.path)
     expect(written.equals(readFileSync(join(VECTORS_DIR, `${storage}.json`)))).toBe(true)
   })
 
+  it('writes the keychain sample byte for byte, apart from the entry name it chooses', async () => {
+    const stored = await saveAccount(SAMPLE, { dir, name: 'keychain', storage: 'keychain' })
+    const sample = readFileSync(join(VECTORS_DIR, 'keychain.json'), 'utf8')
+    // Each file names an entry of its own: the address, "-", and 16 random bytes in hex.
+    const chosen = keyEntryAccount(stored.path)
+    expect(chosen).toMatch(new RegExp(`^${SAMPLE.address}-[0-9a-f]{32}$`))
+    expect(readFileSync(stored.path, 'utf8').replace(chosen, keyEntryAccount(join(VECTORS_DIR, 'keychain.json')))).toBe(sample)
+    // Two files for one account never choose the same entry.
+    const again = await saveAccount(SAMPLE, { dir, name: 'again', storage: 'keychain' })
+    expect(keyEntryAccount(again.path) === chosen).toBe(false)
+  })
+
   it('returns the sample key from the plaintext and keychain samples', async () => {
     copyVectors()
-    security.entries.set(`${KEY_SERVICE} ${SAMPLE.address}`, SAMPLE.privateKey)
+    security.entries.set(keyEntry(join(dir, 'keychain.json')), SAMPLE.privateKey)
     for (const name of ['plaintext', 'keychain']) {
       const loaded = await loadAccount({ dir, name })
       expect(loaded.source).toBe('account-file')
@@ -473,6 +495,9 @@ describe('account file format', () => {
     ['a keychain key without account', { version: 1, address, key: { type: 'keychain', service: KEY_SERVICE } }],
     ['a keychain key with another service', { version: 1, address, key: { type: 'keychain', service: 'login', account: address } }],
     ['a keychain key with another account', { version: 1, address, key: { type: 'keychain', service: KEY_SERVICE, account: 'aleo1other' } }],
+    ['a keychain key named after the bare address', { version: 1, address, key: { type: 'keychain', service: KEY_SERVICE, account: address } }],
+    ["a keychain key named after another address's entry", { version: 1, address, key: { type: 'keychain', service: KEY_SERVICE, account: `aleo1other-${'0'.repeat(32)}` } }],
+    ['a keychain key with a malformed entry name', { version: 1, address, key: { type: 'keychain', service: KEY_SERVICE, account: `${address}-XYZ` } }],
   ])('rejects %s', async (_label, content) => {
     put('default', content)
     expect(await codeOf(accountInfo({ dir }))).toBe('INVALID_ACCOUNT_FILE')
@@ -1066,12 +1091,13 @@ describe('Keychain storage', () => {
     const account = generateAccount()
     const stored = await saveAccount(account, { dir, storage: 'keychain' })
     expect(stored.storage).toBe('keychain')
-    const find = { args: ['find-generic-password', '-s', 'aleo-account-key', '-a', account.address, '-w'], stdin: undefined }
+    const entry = keyEntryAccount(stored.path)
+    const find = { args: ['find-generic-password', '-s', 'aleo-account-key', '-a', entry, '-w'], stdin: undefined }
     expect(security.calls).toHaveLength(3)
-    // An entry another account file may already rely on is looked for first.
+    // The entry is looked for before it is written.
     expect(security.calls[0]).toEqual(find)
     expect(security.calls[1]!.args).toEqual(['-i'])
-    expect(same(security.calls[1]!.stdin!, `add-generic-password -U -s aleo-account-key -a ${account.address} -l aleo-account-key:default -w ${account.privateKey}\n`)).toBe(true)
+    expect(same(security.calls[1]!.stdin!, `add-generic-password -U -s aleo-account-key -a ${entry} -l aleo-account-key:default -w ${account.privateKey}\n`)).toBe(true)
     // The write is confirmed by reading the entry back.
     expect(security.calls[2]).toEqual(find)
     for (const call of security.calls) expect(call.args.some((arg) => arg.includes('APrivateKey1'))).toBe(false)
@@ -1081,42 +1107,43 @@ describe('Keychain storage', () => {
     expect(JSON.parse(text)).toEqual({
       version: 1,
       address: account.address,
-      key: { type: 'keychain', service: 'aleo-account-key', account: account.address },
+      key: { type: 'keychain', service: 'aleo-account-key', account: entry },
     })
+    expect(entry).toMatch(new RegExp(`^${account.address}-[0-9a-f]{32}$`))
   })
 
-  it('labels each entry with the account name and still finds it by address', async () => {
+  it('labels each entry with the account name and finds it by the name the file records', async () => {
     const first = generateAccount()
-    await saveAccount(first, { dir, name: 'trading', storage: 'keychain' })
-    expect(security.labels.get(`${KEY_SERVICE} ${first.address}`)).toBe('aleo-account-key:trading')
+    const tradingKey = await saveAccount(first, { dir, name: 'trading', storage: 'keychain' })
+    expect(security.labels.get(keyEntry(tradingKey.path))).toBe('aleo-account-key:trading')
 
     const second = generateAccount()
     const bot = await saveAccount(second, { dir, name: 'bot_1-a', storage: 'encrypted', password: PASSWORD, savePassword: true })
     expect(security.labels.get(savedPasswordEntry(bot.path))).toBe('aleo-account-password:bot_1-a')
 
     // Changing the storage writes the new entry under the same account name.
-    await protectAccount({ dir, name: 'bot_1-a', storage: 'keychain', password: PASSWORD })
-    expect(security.labels.get(`${KEY_SERVICE} ${second.address}`)).toBe('aleo-account-key:bot_1-a')
+    const botKey = await protectAccount({ dir, name: 'bot_1-a', storage: 'keychain', password: PASSWORD })
+    expect(security.labels.get(keyEntry(botKey.path))).toBe('aleo-account-key:bot_1-a')
     const trading = await protectAccount({ dir, name: 'trading', storage: 'encrypted', password: PASSWORD, savePassword: true })
     expect(security.labels.get(savedPasswordEntry(trading.path))).toBe('aleo-account-password:trading')
 
-    // The label plays no part in the lookup: reads name only the service and the address.
+    // The label plays no part in the lookup: reads name only the service and the entry.
     security.calls.length = 0
     await loadAccount({ dir, name: 'bot_1-a' })
     expect(security.calls).toEqual([
-      { args: ['find-generic-password', '-s', 'aleo-account-key', '-a', second.address, '-w'], stdin: undefined },
+      { args: ['find-generic-password', '-s', 'aleo-account-key', '-a', keyEntryAccount(botKey.path), '-w'], stdin: undefined },
     ])
   })
 
   it('reads the key back from the Keychain', async () => {
     const account = generateAccount()
-    await saveAccount(account, { dir, storage: 'keychain' })
+    const stored = await saveAccount(account, { dir, storage: 'keychain' })
     security.calls.length = 0
     const loaded = await loadAccount({ dir })
     expect(loaded.source).toBe('account-file')
     expect(same(loaded.account.privateKey, account.privateKey)).toBe(true)
     expect(security.calls).toEqual([
-      { args: ['find-generic-password', '-s', 'aleo-account-key', '-a', account.address, '-w'], stdin: undefined },
+      { args: ['find-generic-password', '-s', 'aleo-account-key', '-a', keyEntryAccount(stored.path), '-w'], stdin: undefined },
     ])
   })
 
@@ -1138,8 +1165,8 @@ describe('Keychain storage', () => {
   it('fails with ADDRESS_MISMATCH when the Keychain entry holds another key', async () => {
     const account = generateAccount()
     const other = generateAccount()
-    await saveAccount(account, { dir, storage: 'keychain' })
-    security.entries.set(`${KEY_SERVICE} ${account.address}`, other.privateKey)
+    const stored = await saveAccount(account, { dir, storage: 'keychain' })
+    security.entries.set(keyEntry(stored.path), other.privateKey)
     const error = await failure(loadAccount({ dir }))
     expect(error.code).toBe('ADDRESS_MISMATCH')
     expect(error.message).toContain(account.address)
@@ -1195,20 +1222,20 @@ describe('Keychain storage', () => {
 describe('protectAccount', () => {
   it('moves an account through every storage and removes each old secret', async () => {
     const account = generateAccount()
-    const keyEntry = `${KEY_SERVICE} ${account.address}`
     await saveAccount(account, { dir })
 
     // plaintext -> keychain
     let stored = await protectAccount({ dir, storage: 'keychain' })
     expect(stored).toEqual({ name: 'default', path: join(dir, 'default.json'), address: account.address, storage: 'keychain' })
     expect(readFileSync(stored.path, 'utf8').includes('APrivateKey1')).toBe(false)
-    expect(same(security.entries.get(keyEntry)!, account.privateKey)).toBe(true)
+    const keyEntryName = keyEntry(stored.path)
+    expect(same(security.entries.get(keyEntryName)!, account.privateKey)).toBe(true)
     expect(same(await exportAccount({ dir }), account.privateKey)).toBe(true)
 
     // keychain -> encrypted, password saved: the key entry goes, the password entry appears.
     stored = await protectAccount({ dir, storage: 'encrypted', password: PASSWORD, savePassword: true, prompt: false })
     expect(stored.storage).toBe('encrypted')
-    expect(security.entries.has(keyEntry)).toBe(false)
+    expect(security.entries.has(keyEntryName)).toBe(false)
     expect(security.entries.get(savedPasswordEntry(stored.path))).toBe(Buffer.from(PASSWORD, 'utf8').toString('hex'))
     expect(same(await exportAccount({ dir, prompt: false }), account.privateKey)).toBe(true)
 
@@ -1520,22 +1547,25 @@ describe('storing a new account never replaces a file', () => {
       return undefined
     })
     expect(await codeOf(saveAccount(mine, { dir, storage: 'keychain' }))).toBe('ACCOUNT_EXISTS')
-    expect(security.entries.has(`${KEY_SERVICE} ${mine.address}`)).toBe(false)
+    expect(security.entries.size).toBe(0)
     expect(same(await exportAccount({ dir }), theirs.privateKey)).toBe(true)
   })
 
   it('accepts the same account in the same storage stored by another process meanwhile', async () => {
     const account = generateAccount()
+    const theirEntry = `${account.address}-${'ab'.repeat(16)}`
     security.force((args) => {
+      // The other process stores the same account, with a Keychain entry of its own.
       if (args[0] === '-i' && !existsSync(join(dir, 'default.json'))) {
-        put('default', { version: 1, address: account.address, key: { type: 'keychain', service: KEY_SERVICE, account: account.address } })
+        security.entries.set(`${KEY_SERVICE} ${theirEntry}`, account.privateKey)
+        put('default', { version: 1, address: account.address, key: { type: 'keychain', service: KEY_SERVICE, account: theirEntry } })
       }
       return undefined
     })
     const stored = await saveAccount(account, { dir, storage: 'keychain' })
     expect(stored).toEqual({ name: 'default', path: join(dir, 'default.json'), address: account.address, storage: 'keychain' })
-    // The entry both writers share is kept.
-    expect(same(security.entries.get(`${KEY_SERVICE} ${account.address}`)!, account.privateKey)).toBe(true)
+    // The entry made for the file that was never created is gone; the winner's is untouched.
+    expect([...security.entries.keys()]).toEqual([`${KEY_SERVICE} ${theirEntry}`])
     security.force(undefined)
     expect(same(await exportAccount({ dir }), account.privateKey)).toBe(true)
   })
@@ -1653,37 +1683,78 @@ describe('migrateAccount with both key fields', () => {
 })
 
 describe('Keychain entries shared between account files', () => {
-  it('keeps a key another account file relies on when a later save fails', async () => {
+  it("leaves another account file's key alone when a later save of the same account fails", async () => {
     const account = generateAccount()
-    await saveAccount(account, { dir, name: 'original', storage: 'keychain' })
+    const original = await saveAccount(account, { dir, name: 'original', storage: 'keychain' })
     // The same account is saved again where the file cannot be created.
     const blocked = join(root, 'blocked')
     writeFileSync(blocked, 'not a directory')
     await expect(saveAccount(account, { dir: blocked, name: 'copy', storage: 'keychain' })).rejects.toThrow()
-    // The entry was there before the failed call, so it is not that call's to remove.
-    expect(same(security.entries.get(`${KEY_SERVICE} ${account.address}`)!, account.privateKey)).toBe(true)
+    // The failed save made and removed an entry of its own; the original's is untouched.
+    expect([...security.entries.keys()]).toEqual([keyEntry(original.path)])
     expect(same(await exportAccount({ dir, name: 'original' }), account.privateKey)).toBe(true)
   })
 
-  it('does not rewrite a key entry that already holds the key', async () => {
+  it('does not let a failed save remove the key of a save that succeeds alongside it', async () => {
     const account = generateAccount()
-    await saveAccount(account, { dir, name: 'first', storage: 'keychain' })
-    security.calls.length = 0
-    await saveAccount(account, { dir, name: 'second', storage: 'keychain' })
-    // One look at the existing entry and no write.
-    expect(security.calls.map((call) => call.args[0])).toEqual(['find-generic-password'])
-    expect(security.labels.get(`${KEY_SERVICE} ${account.address}`)).toBe('aleo-account-key:first')
+    let other: Promise<unknown> | undefined
+    security.force((args) => {
+      // Once the first save is writing its Keychain entry, a second save of the
+      // same account starts, and the first one's file can then no longer be created.
+      if (args[0] === '-i' && other === undefined) {
+        other = saveAccount(account, { dir, name: 'b', storage: 'keychain' })
+        mkdirSync(join(dir, 'a.json'), { recursive: true })
+      }
+      return undefined
+    })
+    await expect(saveAccount(account, { dir, name: 'a', storage: 'keychain' })).rejects.toThrow()
+    await other
+    security.force(undefined)
+    // Neither save can adopt the other's entry, so the failed one removes only its own.
+    expect([...security.entries.keys()]).toEqual([keyEntry(join(dir, 'b.json'))])
+    expect(same(await exportAccount({ dir, name: 'b' }), account.privateKey)).toBe(true)
   })
 
-  it('keeps the Keychain key while a neighbouring account file still points at it', async () => {
+  it('gives two account files for one account separate key entries', async () => {
+    const account = generateAccount()
+    const first = await saveAccount(account, { dir, name: 'first', storage: 'keychain' })
+    const second = await saveAccount(account, { dir, name: 'second', storage: 'keychain' })
+    expect(keyEntry(first.path) === keyEntry(second.path)).toBe(false)
+    expect(security.entries.size).toBe(2)
+    expect(security.labels.get(keyEntry(first.path))).toBe('aleo-account-key:first')
+    expect(security.labels.get(keyEntry(second.path))).toBe('aleo-account-key:second')
+  })
+
+  it('removes only its own key entry when one of two files for an account leaves the Keychain', async () => {
     const account = generateAccount()
     await saveAccount(account, { dir, name: 'first', storage: 'keychain' })
-    await saveAccount(account, { dir, name: 'second', storage: 'keychain' })
+    const second = await saveAccount(account, { dir, name: 'second', storage: 'keychain' })
     await protectAccount({ dir, name: 'first', storage: 'plaintext' })
-    expect(security.entries.has(`${KEY_SERVICE} ${account.address}`)).toBe(true)
+    expect([...security.entries.keys()]).toEqual([keyEntry(second.path)])
     expect(same(await exportAccount({ dir, name: 'second' }), account.privateKey)).toBe(true)
-    // Once the last file has left the Keychain, the entry goes.
     await protectAccount({ dir, name: 'second', storage: 'plaintext' })
+    expect(security.entries.size).toBe(0)
+  })
+
+  it('leaves the same account in another directory working when one leaves the Keychain', async () => {
+    const account = generateAccount()
+    const elsewhere = join(root, 'other-project')
+    await saveAccount(account, { dir, storage: 'keychain' })
+    const other = await saveAccount(account, { dir: elsewhere, storage: 'keychain' })
+    await protectAccount({ dir, storage: 'plaintext' })
+    // The other directory's file has its own entry, which nothing here touched.
+    expect([...security.entries.keys()]).toEqual([keyEntry(other.path)])
+    expect(same(await exportAccount({ dir: elsewhere }), account.privateKey)).toBe(true)
+  })
+
+  it('keeps the key entry while a copy of the Keychain account file remains beside it', async () => {
+    const account = generateAccount()
+    const original = await saveAccount(account, { dir, name: 'original', storage: 'keychain' })
+    writeFileSync(join(dir, 'copy.json'), readFileSync(original.path), { mode: 0o600 })
+    await protectAccount({ dir, name: 'original', storage: 'plaintext' })
+    // The copy points at the same entry, so it still finds the key.
+    expect(same(await exportAccount({ dir, name: 'copy' }), account.privateKey)).toBe(true)
+    await protectAccount({ dir, name: 'copy', storage: 'plaintext' })
     expect(security.entries.size).toBe(0)
   })
 
@@ -1768,7 +1839,7 @@ describe('Keychain entries shared between account files', () => {
     security.force(undefined)
     expect(readFileSync(stored.path).equals(bytes)).toBe(true)
     // Only the original key entry is left.
-    expect([...security.entries.keys()]).toEqual([`${KEY_SERVICE} ${account.address}`])
+    expect([...security.entries.keys()]).toEqual([keyEntry(stored.path)])
   })
 })
 
@@ -1843,19 +1914,13 @@ describe.skipIf(process.env.ALEO_KEYSTORE_KEYCHAIN_TEST !== '1' || process.platf
       // Undo the stand-ins for this test only.
       runtime.platform = savedRuntime.platform
       runtime.security = savedRuntime.security
-      // Saved-password entries are named after a file's salt; every one this
-      // test makes is recorded so it can be checked and removed.
-      const passwordAccounts: string[] = []
-      const leftovers = async () => [
-        await readKeychain(KEY_SERVICE, SAMPLE.address),
-        ...(await Promise.all(passwordAccounts.map((account) => readKeychain(PASSWORD_SERVICE, account)))),
-      ]
-      // Checked before the cleanup below is armed: an entry that already exists
-      // may belong to another run in progress, and is left alone.
-      expect((await leftovers()).every((value) => value === undefined)).toBe(true)
+      // Every entry is named after its own file, so each one this test makes is
+      // recorded, checked and removed. Nothing here can touch another run's entries.
+      const made: Array<{ service: string; account: string }> = []
+      const leftovers = async () => Promise.all(made.map((entry) => readKeychain(entry.service, entry.account)))
       try {
         const stored = await saveAccount(SAMPLE, { dir, name: 'keychain', storage: 'keychain' })
-        expect(readFileSync(stored.path).equals(readFileSync(join(VECTORS_DIR, 'keychain.json')))).toBe(true)
+        made.push({ service: KEY_SERVICE, account: keyEntryAccount(stored.path) })
         const loaded = await loadAccount({ dir, name: 'keychain', prompt: false })
         expect(loaded.source).toBe('account-file')
         expect(loaded.account.address).toBe(SAMPLE.address)
@@ -1870,17 +1935,16 @@ describe.skipIf(process.env.ALEO_KEYSTORE_KEYCHAIN_TEST !== '1' || process.platf
           savePassword: true,
           prompt: false,
         })
-        passwordAccounts.push(savedPasswordAccount(encrypted.path))
-        expect(await readKeychain(KEY_SERVICE, SAMPLE.address)).toBeUndefined()
-        expect(await readKeychain(PASSWORD_SERVICE, passwordAccounts[0]!)).toBe(vectors.keychain.passwordValue)
+        made.push({ service: PASSWORD_SERVICE, account: savedPasswordAccount(encrypted.path) })
+        expect(await readKeychain(made[0]!.service, made[0]!.account)).toBeUndefined()
+        expect(await readKeychain(made[1]!.service, made[1]!.account)).toBe(vectors.keychain.passwordValue)
         expect(same(await exportAccount({ dir, name: 'keychain', prompt: false }), SAMPLE.privateKey)).toBe(true)
 
         // Back to plaintext: the saved password goes too.
         await protectAccount({ dir, name: 'keychain', storage: 'plaintext', prompt: false })
         expect((await leftovers()).every((value) => value === undefined)).toBe(true)
       } finally {
-        await deleteKeychain(KEY_SERVICE, SAMPLE.address)
-        for (const account of passwordAccounts) await deleteKeychain(PASSWORD_SERVICE, account)
+        for (const entry of made) await deleteKeychain(entry.service, entry.account)
       }
       expect((await leftovers()).every((value) => value === undefined)).toBe(true)
     })

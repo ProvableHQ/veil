@@ -1,8 +1,42 @@
+import { randomBytes } from 'node:crypto'
 import { KeystoreError } from './errors.js'
 import { runtime } from './runtime.js'
 
-/** Keychain service holding private keys; the entry's account is the address. */
+/**
+ * Keychain service holding private keys. The entry's account names one account
+ * file: the address followed by an identifier chosen when the file is written.
+ */
 export const KEY_SERVICE = 'aleo-account-key'
+
+/** Length of the identifier in a key entry's account, in bytes. */
+const KEY_ENTRY_ID_BYTES = 16
+
+/**
+ * Names a new Keychain entry for the key of one account file.
+ *
+ * Every account file gets an entry of its own. Entries are never shared
+ * between files that were stored separately, so writing, undoing or removing
+ * one file's entry cannot affect another file that holds the same key. The
+ * account file records the name, so the entry is found again after the file
+ * is renamed or moved.
+ *
+ * @param address Aleo address of the account.
+ * @returns The entry's account: the address, `-`, and 16 random bytes in hex.
+ */
+export function newKeyEntryAccount(address: string): string {
+  return `${address}-${randomBytes(KEY_ENTRY_ID_BYTES).toString('hex')}`
+}
+
+/**
+ * Checks that a key entry's account belongs to an address.
+ *
+ * @param account The `account` recorded in an account file.
+ * @param address The address recorded in the same file.
+ * @returns True when the account is the address, `-`, and 32 hex characters.
+ */
+export function isKeyEntryAccount(account: string, address: string): boolean {
+  return account.startsWith(`${address}-`) && /^[0-9a-f]{32}$/.test(account.slice(address.length + 1))
+}
 
 /**
  * Keychain service holding saved passwords. The entry's account names one
@@ -21,7 +55,7 @@ const UNQUOTED = /^[A-Za-z0-9]+$/
 
 /**
  * Entry accounts that can be placed on a `security -i` command line without
- * quoting: an address, optionally followed by `-` and a salt in hex.
+ * quoting: an address, optionally followed by `-` and an identifier in hex.
  */
 const ENTRY_ACCOUNT = /^[A-Za-z0-9]+(?:-[0-9a-f]+)?$/
 
@@ -100,13 +134,12 @@ export async function readKeychain(service: string, address: string): Promise<st
  * Access shows, is `<service>:<name>`, so entries of several accounts can be
  * told apart; the label takes no part in finding the entry.
  *
- * An entry may be shared: every account file that holds the same key in the
- * Keychain points at one entry. The existing entry is therefore read first,
- * and one that already holds the value is left as it is.
+ * The existing entry is read first, and one that already holds the value is
+ * left as it is.
  *
  * @param service Keychain service name.
- * @param address The entry's account: an Aleo address, or an address followed
- *   by `-` and a salt in hex.
+ * @param address The entry's account: an Aleo address followed by `-` and an
+ *   identifier in hex.
  * @param value Secret to store. MUST be ASCII letters and digits only.
  * @param name Account name, shown in the entry's label.
  * @returns True when this call created the entry; false when an entry already

@@ -10,7 +10,7 @@ import {
   type EncryptedKey,
 } from './encrypted.js'
 import { KeystoreError } from './errors.js'
-import { KEY_SERVICE } from './keychain.js'
+import { KEY_SERVICE, isKeyEntryAccount } from './keychain.js'
 import { runtime } from './runtime.js'
 
 /** Format version written to, and accepted from, an account file. */
@@ -147,9 +147,12 @@ export function parseAccountFile(text: string, path: string): AccountFile {
       exact(key, ['type', 'service', 'account'], '"key"')
       const service = str(key.service, 'key.service')
       const account = str(key.account, 'key.account')
-      // Pinned so a crafted file cannot direct the reader to another entry.
+      // Pinned so a crafted file cannot direct the reader to an entry of
+      // another service or another address.
       if (service !== KEY_SERVICE) throw invalid(`"key.service" must be "${KEY_SERVICE}"`)
-      if (account !== address) throw invalid('"key.account" must equal "address"')
+      if (!isKeyEntryAccount(account, address)) {
+        throw invalid('"key.account" must be "address" followed by "-" and 32 hex characters')
+      }
       return { version: FILE_VERSION, address, key: { type, service, account } }
     }
     case 'encrypted': {
