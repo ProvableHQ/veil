@@ -2,11 +2,27 @@
  * Node-only helpers for `@provablehq/veil-aleo-sdk`.
  *
  * Imported from `@provablehq/veil-aleo-sdk/node` rather than the package root,
- * so the `node:fs` dependency never reaches a browser bundle.
+ * so the `node:fs` dependency never reaches a browser bundle. Holds the
+ * file-backed credential store and the account keystore.
  */
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { ProvableApiCredentials, ProvableCredentialStore } from './provableApi.js'
+
+export {
+  saveAccount,
+  loadAccount,
+  accountInfo,
+  protectAccount,
+  exportAccount,
+  migrateAccount,
+  KeystoreError,
+  type AccountStorage,
+  type KeySource,
+  type AccountLocation,
+  type StoredAccount,
+  type LoadedAccount,
+} from './keystore/index.js'
 
 /**
  * Builds a credential store backed by a JSON file.

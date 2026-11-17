@@ -52,6 +52,7 @@ import {
 import type { Decryptor } from '@provablehq/veil-core'
 import { buildOwnedFilter } from './utils/rss.js'
 import { generateMnemonic, mnemonicToHDKey, type AleoDerivationId } from './mnemonic.js'
+import { privateKeyToAccount } from './account.js'
 import {
   createProvableSession,
   memoryCredentialStore,
@@ -83,6 +84,8 @@ export {
   type AuthenticateProvableApiReturnType,
   type ProvableApiActions,
 } from './provableApi.js'
+
+export { privateKeyToAccount }
 
 export {
   BLS12377HDKey,
@@ -1561,27 +1564,6 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
 // height 0, scheduled heights strictly increasing, only a u32::MAX tail may
 // repeat — and a bad list panics inside the WASM with an opaque `unreachable`.
 const DEVNODE_CONSENSUS_HEIGHTS = '0,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25'
-
-function privateKeyToAccount(privateKey: string): LocalAccount<'privateKey'> {
-  const sdkAccount = new Account({ privateKey })
-  const address = sdkAccount.address().to_string()
-  const viewKey = sdkAccount.viewKey().to_string()
-
-  const signFn = async (message: Uint8Array): Promise<Uint8Array> => {
-    const sig = sdkAccount.sign(message)
-    return new TextEncoder().encode(sig.to_string())
-  }
-
-  return {
-    type: 'local',
-    source: 'privateKey',
-    address,
-    privateKey,
-    viewKey,
-    sign: signFn,
-    signMessage: signFn,
-  }
-}
 
 /** Creates a new random Aleo account (uses static SDK binaries). */
 export function generateAccount(): LocalAccount<'privateKey'> {

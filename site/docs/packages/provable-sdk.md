@@ -23,8 +23,9 @@ npm install @provablehq/veil-core @provablehq/veil-aleo-sdk
 
 - **`loadNetwork(name)`** — the entry point; asynchronously loads the WASM binaries for `'mainnet'` or `'testnet'` and returns a network-bound `AleoSdk` handle.
 - **`AleoSdk` methods** — `createAleoClient`, `privateKeyToAccount`, `mnemonicToAccount`, `generateMnemonicAccount`, `generateAccount`, `createProvingConfig`, `createNetworkClient`, `createRemoteScanner`, `createStandaloneScanner`, `decryptRecord`, `verifySignature`.
-- **Standalone** — `generateAccount` (uses statically-loaded testnet binaries; no `loadNetwork` call needed), `createDevnodeClient` (zero-config client pointed at a local devnode).
+- **Standalone** — `generateAccount` and `privateKeyToAccount` (use statically-loaded testnet binaries; no `loadNetwork` call needed), `createDevnodeClient` (zero-config client pointed at a local devnode).
 - **Mnemonic / HD** — `generateMnemonic`, `validateMnemonic`, `mnemonicToHDKey`, `STANDARD_PATH`, `LEGACY_PATH`.
+- **Account keystore (`@provablehq/veil-aleo-sdk/node`)** — `saveAccount`, `loadAccount`, `accountInfo`, `protectAccount`, `exportAccount`, `migrateAccount`, `KeystoreError`. Node-only; see [Account keystore](../api/provable-sdk/accountKeystore.md).
 
 Key and mnemonic operations are mathematically network-agnostic — the same
 private key or mnemonic derives the same address and view key regardless of

@@ -1,0 +1,3 @@
+# Checked byte for byte against the same files in the Python SDK, so they keep
+# LF line endings on every platform.
+packages/provable-sdk/test/fixtures/keystore-vectors/*.json text eol=lf
