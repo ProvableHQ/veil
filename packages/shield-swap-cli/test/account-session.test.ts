@@ -49,7 +49,7 @@ function readState(network = 'testnet'): Record<string, unknown> {
   return JSON.parse(readFileSync(statePath(network), 'utf8'))
 }
 
-/** Writes a state file as an earlier version of the command did, key included. */
+/** Writes a state file that holds its private key, which the lookup reads as the last source. */
 function legacyState(owner: { address: string; privateKey: string }, network = 'testnet'): void {
   mkdirSync(dirname(statePath(network)), { recursive: true })
   writeFileSync(

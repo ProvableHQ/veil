@@ -36,8 +36,8 @@
  *
  * State lands in ./.shield-swap/<network>/state.json: the address, the
  * account name and the DEX credentials — gitignore it. This command never
- * writes a private key there; a state file from an earlier version still
- * holds one until `shield-swap account migrate` moves it. The state is not
+ * writes a private key there; a state file that already holds one keeps it
+ * until `shield-swap account migrate` moves it. The state is not
  * shared between networks, including the blinded identity store, whose
  * reservations are only meaningful against the chain they were checked on.
  *
@@ -99,7 +99,7 @@ function argValue(argv: string[], flag: string): string | undefined {
   return i >= 0 ? argv[i + 1] : undefined
 }
 
-/** Keystore failures that need the user, not a retry. */
+/** Keystore error codes the user has to resolve. Setup exits 2 on them, and a retry does not help. */
 const NEEDS_PERSON = new Set(['ACCOUNT_NOT_FOUND', 'KEY_NOT_STORED', 'PASSWORD_REQUIRED'])
 
 /**
@@ -194,7 +194,8 @@ async function setup(argv: string[]): Promise<void> {
   // The network must be passed explicitly: loadSession defaults to testnet, so
   // omitting it would authenticate and redeem against testnet while writing
   // the results into the network-scoped state this script resolved.
-  // The name is passed again so an explicit --name also beats ALEO_ACCOUNT here.
+  // The name is passed again so an explicit --name also takes precedence
+  // over ALEO_ACCOUNT here.
   const { client, account } = await loadSession({ network, name })
   console.log('✓ DEX API session established (challenge/verify)')
 

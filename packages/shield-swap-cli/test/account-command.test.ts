@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OTHER_PASSWORD, PASSWORD, mode, openSandbox, posix, type Outcome, type Sandbox } from './account-sandbox.js'
 
 /**
- * Covers `shield-swap account`: the six commands, their flags, output shapes
- * and exit codes.
+ * Covers `shield-swap account`: the six commands, their flags, the text and
+ * JSON they print, and their exit codes.
  *
  * Each command runs in-process against a temporary accounts directory, with
  * the environment, the home directory, the Keychain tool and the terminal
@@ -897,7 +897,7 @@ describe('export', () => {
 })
 
 describe('migrate', () => {
-  /** Writes a Shield Swap state file as an earlier version of the command did. */
+  /** Writes a Shield Swap state file that holds its private key. */
   function legacyState(path: string, owner: { address: string; privateKey: string }, network = 'testnet'): string {
     mkdirSync(dirname(path), { recursive: true })
     const text = JSON.stringify({ network, privateKey: owner.privateKey, address: owner.address, dexApiToken: 'ss_test' }, null, 2)
@@ -999,7 +999,7 @@ describe('migrate', () => {
 
     const outcome = await account('migrate', '--remove-legacy-key', '--json')
     expect(outcome.status).toBe(0)
-    // Without the address, the stripped file would no longer count as set up.
+    // A state file with neither a key nor an address does not count as set up.
     expect(JSON.parse(readFileSync(state, 'utf8'))).toEqual({ network: 'testnet', account: 'default', address: owner.address })
     expect((await storedKey()) === owner.privateKey).toBe(true)
   })

@@ -34,9 +34,9 @@ const print = (value: unknown) => output(value, data => console.log(JSON.stringi
 
 /**
  * Dispatches record inspection, planning, maintenance, and journal status.
- * Resolves the account through the keystore lookup, with the configured key
- * variable as the first source, and needs no DEX authentication. Only explicit
- * --execute on rebalance or run may prove and submit transactions.
+ * Signs with the key in the configured variable when it is set, and otherwise
+ * with the account every command resolves. Needs no DEX authentication. Only
+ * explicit --execute on rebalance or run may prove and submit transactions.
  * @param argv Arguments following `shield-swap inventory`.
  * @returns Resolves after output or shutdown; failures set the process exit code.
  * @example
@@ -64,11 +64,11 @@ export async function main(argv: string[]): Promise<void> {
     if (values.asset) raw.policies = [{ asset: { program: values.asset, standard: values.standard, recordName: values['record-name'], amountField: values['amount-field'] }, target: { records: Number(values.records ?? '1') } }]
     const config = parseInventoryConfig(raw)
     if (command !== 'status' && !config.policies.length) throw new Error('Supply --asset or configure at least one inventory policy')
-    // The configured variable selects the signing key outright, as it always
-    // has: an inventory run may use another account than the one the network's
-    // state records. Without it the lookup is the one every command uses: the
-    // key variables, the account file, then a key still held by a legacy state
-    // file, checked against the address the state records.
+    // The configured variable selects the signing key outright, so an
+    // inventory run may use another account than the one the network's state
+    // records. Without it the lookup is the one every command uses: the key
+    // variables, the account file, then a key held by the state file, checked
+    // against the address the state records.
     const privateKey =
       process.env[config.privateKeyEnv] ||
       (

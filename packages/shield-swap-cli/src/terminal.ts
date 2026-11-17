@@ -117,7 +117,7 @@ function readVisibleLine(message: string): Promise<string> {
 }
 
 /**
- * Process-level facilities the account commands depend on.
+ * Platform and terminal access the account commands depend on.
  *
  * @property platform Operating system identifier, as `process.platform`.
  * @property attached Reports whether a person can answer a prompt: standard
@@ -140,7 +140,14 @@ export type Terminal = {
   notify: (message: string) => void
 }
 
-/** The live facilities: the real platform and terminal. */
+/**
+ * Terminal facilities of the running process.
+ *
+ * Tests replace its members to stand in for a person at a terminal.
+ *
+ * @example
+ * if (terminal.attached()) terminal.notify('A person can answer a prompt.')
+ */
 export const terminal: Terminal = {
   platform: process.platform,
   attached: () => process.stdin.isTTY === true && process.stderr.isTTY === true,

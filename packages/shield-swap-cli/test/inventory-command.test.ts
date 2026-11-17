@@ -116,7 +116,7 @@ describe('shield-swap inventory command', () => {
     vi.stubEnv('ALEO_PRIVATE_KEY', 'environment-key')
     await inventory(['plan', '--asset', 'points.aleo', '--record-name', 'Balance', '--amount-field', 'points', '--network', 'mainnet', '--database', join(directory, 'other.sqlite'), '--json'])
     expect(options[0]).toMatchObject({ network: 'mainnet', privateKey: 'environment-key', recordManagement: { chainId: 'aleo:mainnet' } })
-    // The configured variable selects the key outright, as it always has; the shared lookup is not consulted.
+    // The configured variable selects the key outright; the shared lookup is not consulted.
     expect(vi.mocked(resolveAccount)).not.toHaveBeenCalled()
     expect(JSON.parse(stdout.join('\n')).plans[0].asset).toMatchObject({ program: 'points.aleo', recordName: 'Balance', amountField: 'points' })
   })

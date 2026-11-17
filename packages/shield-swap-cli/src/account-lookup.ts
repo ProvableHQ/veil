@@ -1,7 +1,7 @@
 /**
- * The one place the `shield-swap` command finds its signing account.
+ * Resolves the signing account for every `shield-swap` command.
  *
- * Internal to the package. Every command that signs goes through
+ * Internal to the package. Every command that signs calls
  * {@link resolveAccount}, so they all apply the same lookup order and the same
  * checks against the state file.
  */
@@ -10,7 +10,7 @@ import { privateKeyToAccount } from '@provablehq/veil-aleo-sdk'
 import { KeystoreError, loadAccount, type LoadedAccount } from '@provablehq/veil-aleo-sdk/node'
 import type { ShieldSwapState } from './session.js'
 
-/** Variables that change what a lookup returns; part of each lookup's identity. */
+/** Environment variables that change what a lookup returns. A changed value makes a new lookup. */
 const LOOKUP_VARIABLES = [
   'ALEO_PRIVATE_KEY',
   'SHIELD_SWAP_PRIVATE_KEY',
@@ -23,7 +23,7 @@ const LOOKUP_VARIABLES = [
   'USERPROFILE',
 ] as const
 
-/** Lookups already made by this process, by the digest of their inputs. */
+/** Lookups this process has made, keyed by the digest of their inputs. */
 const lookups = new Map<string, Promise<LoadedAccount>>()
 
 /**
@@ -31,13 +31,19 @@ const lookups = new Map<string, Promise<LoadedAccount>>()
  *
  * The order is an explicit name, then `ALEO_ACCOUNT`, then the name recorded
  * in the state file, then `default`. The keystore applies the variable and the
- * default itself, but its `name` option beats the variable, so the recorded
- * name is passed only when no name was given and the variable is unset.
+ * default itself, and its `name` option takes precedence over the variable.
+ * The recorded name is therefore returned only when no name was given and the
+ * variable is unset. Reads the environment and nothing else.
  *
- * @param state State of the selected network.
- * @param name Explicit account name, such as a `--name` flag.
+ * @param state State of the selected network. Its `account` is the recorded
+ *   name.
+ * @param name Optional explicit account name, such as a `--name` flag.
+ *   Defaults to the order above.
  * @returns The `name` option for a keystore call, or `undefined` to leave the
  *   choice to `ALEO_ACCOUNT` and the default.
+ *
+ * @example
+ * const name = accountName(loadState('testnet'), 'trading') // 'trading'
  */
 export function accountName(state: Pick<ShieldSwapState, 'account'>, name?: string): string | undefined {
   if (name !== undefined) return name
@@ -49,8 +55,8 @@ export function accountName(state: Pick<ShieldSwapState, 'account'>, name?: stri
  *
  * Sources, first match wins: the `privateKey` option, `ALEO_PRIVATE_KEY` and
  * `ALEO_PRIVATE_KEY_FILE` (with their `SHIELD_SWAP_` aliases), the selected
- * account file, then a key still held by a state file written before account
- * files existed. The resolved key MUST derive the address the state records.
+ * account file, then a `privateKey` held by the state file itself. The
+ * resolved key MUST derive the address the state records.
  * A key from the environment is used for the process and written nowhere.
  *
  * Reads the environment and the account file, and may run the macOS
@@ -62,11 +68,12 @@ export function accountName(state: Pick<ShieldSwapState, 'account'>, name?: stri
  *
  * @param options.state State of the selected network: its `address` is the
  *   expected address, its `account` the recorded account name and its
- *   `privateKey` the legacy key.
- * @param options.name Explicit account name. Defaults to `ALEO_ACCOUNT`, then
- *   the recorded name, then `default`.
- * @param options.privateKey Key supplied by the caller, taking precedence over
- *   every other source. The key variables are then not read.
+ *   `privateKey` the last source.
+ * @param options.name Optional explicit account name. Defaults to
+ *   `ALEO_ACCOUNT`, then the recorded name, then `default`.
+ * @param options.privateKey Optional key supplied by the caller. Takes
+ *   precedence over every other source, and the key variables are then not
+ *   read. Defaults to the lookup above.
  * @returns The signing account, the source of its key and the account file
  *   when one exists.
  * @throws KeystoreError With the code the keystore reports, such as
@@ -133,7 +140,10 @@ export async function resolveAccount(options: {
 /**
  * Derives the account of a private key string.
  *
- * @param privateKey Candidate private key.
+ * Computes the address without reading a file or contacting a network.
+ *
+ * @param privateKey Candidate private key, as text starting with
+ *   `APrivateKey1`.
  * @param origin Where the string came from, named in the error message.
  * @returns The address and the key.
  * @throws KeystoreError `INVALID_KEY` when the string is not a private key.
