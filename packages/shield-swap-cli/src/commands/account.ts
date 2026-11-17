@@ -49,59 +49,97 @@ import { existingStatePath, statePath, stateFiles, writeStateFile } from '../sta
 import { terminal } from '../terminal.js'
 
 /** Describes account commands and options for help and usage errors. */
-const USAGE = `shield-swap account — save an Aleo account for trading and scripts
+const USAGE = `shield-swap account — create, import, and protect an Aleo account
 
 Usage: shield-swap account <command> [options]
 
-Import an existing key or recovery phrase to keep the same address and funds.
-Create an account when a separate address is needed.
+Save an account once, then reuse it in Shield Swap commands and Veil scripts.
+Import a key or recovery phrase from an existing wallet to keep using that
+account. Create a new account to trade from a different address.
 
-Use --storage keychain on macOS or --storage encrypted to protect the key.
-Keychain keeps the key outside the account file; encrypted storage requires
-a password to unlock the key in the file. The default is plaintext: anyone
-who can read the account file can use its private key.
+Create a new account with an encrypted key:
+  shield-swap account create --name trading --storage encrypted
 
-  create     generate a key and store it
-  import     store an existing key, or the account of a recovery phrase
-  show       print the address, account name and storage type; never the key
-  protect    change how the key is stored
-  export     print the private key; requires a terminal
-  migrate    copy a key from a legacy state.json or profile.json into an account file
+Import an existing account with an encrypted key:
+  shield-swap account import --name trading --storage encrypted
+  Enter the key or recovery phrase at the hidden prompt, or use --key-file.
 
-Every command:
-  --name <name>            account name; default ALEO_ACCOUNT, then default
-  --dir <path>             accounts directory; default ALEO_ACCOUNTS_DIR, then ~/.aleo/accounts
-  --json                   one machine-readable object on standard output
+Then run shield-swap setup --name trading to prepare the account for trading.
 
-create, import, protect, migrate:
-  --storage <type>         plaintext, keychain (macOS) or encrypted; none on create and import
-  --save-password          also save the password in the macOS Keychain (encrypted storage)
+Commands:
+  create     Create a new account.
+  import     Save an existing account from its private key or recovery phrase.
+  show       Check the saved address, storage type, and account file location.
+  protect    Encrypt a saved key, move it to Keychain, or change its password.
+  export     Display the private key for backup or import into a wallet.
+  migrate    Import the key stored in a Shield Swap state or profile file.
 
-create:
-  --mnemonic               derive the key from a new recovery phrase, shown once and stored nowhere
+Choose an account:
+  --name <name>          Select the account to create or use.
+                         Uses ALEO_ACCOUNT if set, otherwise "default".
+  --dir <path>           Read and save account files in this directory.
+                         Uses ALEO_ACCOUNTS_DIR if set, otherwise ~/.aleo/accounts.
+  --json                 Print account details and account errors as JSON.
+                         Commands that display secrets do not accept this flag.
 
-import:
-  --key-file <path>        text file holding the private key
-  --mnemonic-file <path>   text file holding a recovery phrase
-  --index <n>              account index for a recovery phrase; default 0
-  --derivation <id>        standard (default) or legacy
+Choose key storage (create, import, protect, migrate):
+  --storage <type>
+    encrypted            Encrypt the private key in the file with a password.
+    keychain             Keep the key in the macOS Keychain, outside the file.
+    plaintext            Save the private key as readable text in the file.
+    none                 Save only the address; supply the key on each run.
+                         Available for create and import only.
 
-protect:
-  --forget-password        remove a saved password from the macOS Keychain
+  Use encrypted storage, or Keychain on macOS, to protect the saved key.
+  Omitting --storage uses plaintext: anyone who can read the file can use
+  the account. For protect, supply --storage or use --forget-password on its own.
 
-migrate:
-  --from <path>            the legacy file; default the state.json of the selected network
-  --network <network>      testnet (default) or mainnet; selects that state.json
-  --remove-legacy-key      strip the key from the legacy file once the new account is confirmed
+  --save-password        Save the encryption password in the macOS Keychain
+                         so later commands can unlock without prompting.
 
---storage defaults to plaintext, except on protect, which requires it unless
---forget-password is given alone. import reads --key-file or --mnemonic-file,
-then ALEO_PRIVATE_KEY or ALEO_PRIVATE_KEY_FILE, then asks at a hidden prompt. A
-password is never taken from the command line: it comes from
-ALEO_ACCOUNT_PASSWORD, the macOS Keychain or a hidden prompt.
+Create an account with a recovery phrase:
+  --mnemonic             Generate a phrase for restoring the account in a wallet.
+                         Displayed once at a terminal and not saved.
 
-Exit codes: 0 done · 1 failed · 2 needs a person (no account, no stored key,
-no password, no terminal) · 64 usage error.`
+Import a key or recovery phrase:
+  --key-file <path>      Read the private key from a text file.
+  --mnemonic-file <path> Restore an account from a phrase in a text file.
+  --index <n>            Select the account to restore from the phrase.
+                         Defaults to 0; accepts integers from 0 to 2147483647.
+  --derivation <id>      Match the original wallet's derivation path:
+                         standard (default) or legacy.
+
+  Without a file option, import checks ALEO_PRIVATE_KEY, then
+  ALEO_PRIVATE_KEY_FILE, then prompts for a key or phrase. Import leaves
+  source files unchanged, including any readable key or phrase they contain.
+
+Remove a saved password (protect):
+  --forget-password      Remove the encryption password saved in Keychain.
+                         Used alone, keeps the current account password. Later
+                         runs need it from the environment or a prompt.
+
+Move a key out of a state or profile file (migrate):
+  --from <path>          Read the key from this file. Defaults to the selected
+                         network's Shield Swap state.json.
+  --network <network>    Select testnet or mainnet when --from is omitted.
+                         Uses SHIELD_SWAP_NETWORK if set, otherwise testnet.
+  --remove-legacy-key    Remove the source key after verifying the saved account.
+                         Without this flag, the source file retains its key.
+
+Passwords are entered at a hidden prompt or supplied through
+ALEO_ACCOUNT_PASSWORD. A password saved in Keychain can unlock an encrypted
+account on later runs. To change an encrypted account's password, run this
+command at a terminal:
+  shield-swap account protect --storage encrypted
+
+export, create --mnemonic, and create --storage none display secrets.
+They require terminal input and output and cannot be used with --json.
+
+Exit codes:
+  0   Completed successfully.
+  1   Command failed, or key export was not confirmed.
+  2   An account, key, password, or terminal is missing.
+  64  Invalid command or option.`
 
 /** Indicates successful completion. */
 const EXIT_DONE = 0
