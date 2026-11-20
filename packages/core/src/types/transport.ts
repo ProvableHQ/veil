@@ -1,9 +1,21 @@
 import type { Network } from './wallet.js'
 
-/** Sends one named request over a transport and resolves with the untyped result. */
+/**
+ * Sends one named request over a transport and resolves with the untyped result.
+ *
+ * @property method Veil method name the transport maps to a wire request.
+ * @property params Optional method parameters. Defaults to none.
+ * @property clientHeaders Optional identifying headers for this one request,
+ *   such as the SDK and action that issued it. Defaults to none. The HTTP
+ *   transport sends them only to Provable-operated hosts and drops them when
+ *   `clientHeader` is `false`; other transports may ignore them. Use for
+ *   usage attribution only. Do not put credentials or routing headers here;
+ *   those belong in the transport's `headers` config.
+ */
 export type RequestFn = (args: {
   method: string
   params?: unknown
+  clientHeaders?: Record<string, string> | undefined
 }) => Promise<unknown>
 
 /**

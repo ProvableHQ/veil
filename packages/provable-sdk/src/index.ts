@@ -41,6 +41,7 @@ import {
   createPublicClient,
   createWalletClient,
   http,
+  isProvableHost,
   BaseError,
   ProvingError,
   ConfigurationError,
@@ -697,6 +698,10 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           programManager.setAccount(sdkAccount)
         }
 
+        if (isProvableHost(networkUrl)) {
+          for (const [name, value] of Object.entries(txOptions.clientHeaders ?? {})) programManager.setHeader(name, value)
+        }
+
         // The user-facing API takes dynamic-dispatch import names (`string[]`);
         // the SDK needs a name → source map covering BOTH the program's static
         // imports (declared in the `import` block) and the user's dynamic ones.
@@ -744,6 +749,9 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
             await txOptions.onProgress?.({ type: 'request-built' })
 
             const dpsClient = new AleoNetworkClient(proverUrl)
+            if (isProvableHost(proverUrl)) {
+              for (const [name, value] of Object.entries(txOptions.clientHeaders ?? {})) dpsClient.setHeader(name, value)
+            }
             const auth = async (forceRefresh: boolean) => {
               if (options.auth) return { auth: options.auth }
               if (session) return { jwtData: await session.getJwt({ forceRefresh }) }
@@ -879,6 +887,10 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
         if (options.account) {
           programManager.setAccount(new currentSdk.Account({ privateKey: options.account.privateKey }))
         }
+        const clientHeaders = Object.entries(execOptions.clientHeaders ?? {})
+        if (isProvableHost(networkUrl)) {
+          for (const [name, value] of clientHeaders) programManager.setHeader(name, value)
+        }
 
         /** Convert microcredits (Veil API) to credits (SDK API) for priority fee */
         const priorityFee = Number(execOptions.fee) / 1_000_000
@@ -893,8 +905,13 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           : undefined
 
         /** Build a Veil publicClient bound to the current networkUrl for chain polling. */
-        const buildPollingClient = () =>
-          createPublicClient({ transport: http(networkUrl, { network: configNetwork as Network }) })
+        const buildPollingClient = () => {
+          const client = createPublicClient({ transport: http(networkUrl, { network: configNetwork as Network }) })
+          if (!execOptions.clientHeaders) return client
+          const request: typeof client.request = (args) =>
+            client.request({ ...args, clientHeaders: { ...execOptions.clientHeaders, ...args.clientHeaders } })
+          return Object.assign(Object.create(client), { request }) as typeof client
+        }
 
         if (options.mode === 'delegated') {
           const proverUrl = resolveProverUrl()
@@ -918,6 +935,9 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
             })
 
             const dpsClient = new AleoNetworkClient(proverUrl)
+            if (isProvableHost(proverUrl)) {
+              for (const [name, value] of clientHeaders) dpsClient.setHeader(name, value)
+            }
 
             const auth = async (forceRefresh: boolean) => {
               if (options.auth) return { auth: options.auth }
@@ -1011,6 +1031,9 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           try {
             const submitClient = new AleoNetworkClient(networkUrl)
             submitClient.setVerboseErrors(false)
+            if (isProvableHost(networkUrl)) {
+              for (const [name, value] of clientHeaders) submitClient.setHeader(name, value)
+            }
             txId = await submitClient.submitTransaction(tx)
           } catch (e) {
             if (e instanceof BaseError) throw e

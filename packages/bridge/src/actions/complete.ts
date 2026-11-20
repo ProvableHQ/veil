@@ -1,3 +1,4 @@
+import { planSubject, withBridgeContext } from './internal/clientContext.js'
 import * as cctp from '../protocols/cctp/evm.js'
 import * as verulink from '../protocols/verulink/lifecycle.js'
 import { classifyBroadcastError, DuplicateTransactionError } from '@provablehq/veil-core'
@@ -55,6 +56,7 @@ export async function complete(
   } else {
     throw new BridgeError('Bridge completion requires recovered progress')
   }
+  clients = withBridgeContext(clients, 'complete', planSubject(plan))
   // The destination mint asserts the same pause flags, so refuse before any
   // wallet interaction when the route has been halted since the deposit.
   if (!params.skipRouteStatus) await assertRouteNotPaused(registry, clients, plan.route.id)

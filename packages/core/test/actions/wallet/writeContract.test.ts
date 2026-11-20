@@ -66,6 +66,21 @@ describe('writeContract', () => {
     })
   })
 
+  it('forwards clientHeaders to the build and the broadcast for a local account', async () => {
+    const builtTx = { id: 'at1tagged' }
+    const buildTransaction = vi.fn().mockResolvedValue(builtTx)
+    const request = vi.fn().mockResolvedValue('at1tagged')
+    const client = { account: { type: 'local', sign: vi.fn() }, proving: { buildTransaction }, request } as any
+    const clientHeaders = { 'X-Aleo-Bridge': 'action=execute' }
+    await writeContract(client, { program: 'token.aleo', function: 'mint', inputs: ['1u64'], clientHeaders })
+    expect(buildTransaction).toHaveBeenCalledWith(expect.objectContaining({ clientHeaders }))
+    expect(request).toHaveBeenCalledWith({
+      method: 'sendTransaction',
+      params: { transaction: JSON.stringify(builtTx) },
+      clientHeaders,
+    })
+  })
+
   it('reports a prepared transaction before broadcast and submission after the node returns', async () => {
     const order: string[] = []
     const builtTx = { type: 'execute', id: 'at1built' }

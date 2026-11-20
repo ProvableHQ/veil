@@ -1,3 +1,4 @@
+import { withBridgeContext } from './internal/clientContext.js'
 import { decodeFunctionResult, encodeFunctionData, getAddress, parseAbi } from 'viem'
 import { BridgeError } from '../errors/bridgeErrors.js'
 import type { BridgeChainClient, BridgeChainClients } from '../connections/resolve.js'
@@ -33,7 +34,8 @@ export async function getRouteStatus(
 ): Promise<BridgeRouteStatus> {
   const route = registry.routes.find((entry) => entry.id === params.routeId)
   if (!route) throw new BridgeError(`Unknown bridge route: ${params.routeId}`)
-  const sources = await Promise.all((route.pauseSources ?? []).map((source) => probe(clients, source)))
+  const tagged = withBridgeContext(clients, 'route-status', { protocol: route.protocol, routeId: route.id })
+  const sources = await Promise.all((route.pauseSources ?? []).map((source) => probe(tagged, source)))
   return {
     routeId: route.id,
     paused: sources.some((source) => source.state === 'paused'),

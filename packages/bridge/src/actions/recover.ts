@@ -1,3 +1,4 @@
+import { isTransferId, planSubject, withBridgeContext } from './internal/clientContext.js'
 import { isRegistryVersionCompatible } from '../registry/compatibility.js'
 import * as cctp from '../protocols/cctp/evm.js'
 import * as verulink from '../protocols/verulink/lifecycle.js'
@@ -45,7 +46,11 @@ export async function recover(
   }
   // Rebuild route details from the current reviewed catalog instead of trusting
   // serialized contracts or programs from an older application process.
-  const plan = prepare(registry, checkpoint.intent)
+  const plan = {
+    ...prepare(registry, checkpoint.intent),
+    ...(isTransferId(checkpoint.transferId) ? { transferId: checkpoint.transferId } : {}),
+  }
+  clients = withBridgeContext(clients, 'recover', planSubject(plan))
   const route = resolveTransferRoute(registry, plan)
   if (checkpoint.version !== 1
     || checkpoint.route.id !== plan.route.id

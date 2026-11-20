@@ -106,6 +106,7 @@ export function createBridgeCheckpoint(
       ...(plan.destinationAsset.locator?.kind === 'aleo-program' ? { mintMode: plan.mintMode } : {}),
     },
     route: { id: plan.route.id, registryVersion: plan.registryVersion },
+    ...(plan.transferId ? { transferId: plan.transferId } : {}),
     ...(source ? { source } : {}),
     ...(receipt.destinationTxId || typeof preparedDestinationTransaction === 'string'
       ? {

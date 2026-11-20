@@ -1,3 +1,4 @@
+import { planSubject, withBridgeContext } from './internal/clientContext.js'
 import type { BridgeChainClients } from '../connections/resolve.js'
 import { BridgeError } from '../errors/bridgeErrors.js'
 import type { WaitParameters } from '../types/actions.js'
@@ -45,6 +46,7 @@ export async function wait(
   if (receipt.protocol !== plan.protocol || receipt.protocolState.routeId !== plan.route.id) {
     throw new BridgeError('Bridge progress does not match its reconstructed plan')
   }
+  clients = withBridgeContext(clients, 'wait', planSubject(plan))
   const current = toBridgeProgress(plan, receipt)
   const until = [...new Set([...CALLER_BOUNDARIES, ...(params.until ?? [])])]
   if (current.next !== 'wait' || until.includes(receipt.status)) return current

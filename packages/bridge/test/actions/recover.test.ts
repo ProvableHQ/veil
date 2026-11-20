@@ -227,10 +227,10 @@ describe('bridge recovery checkpoints', () => {
       onCheckpoint(checkpoint) { checkpoints.push(checkpoint) },
     })
 
-    expect(request).toHaveBeenCalledWith({
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
       method: 'sendTransaction',
       params: { transaction: serializedTransaction },
-    })
+    }))
     expect(result).toMatchObject({
       kind: 'aleo-hyperlane',
       transactionId: 'at1prepared',

@@ -1,3 +1,4 @@
+import { planSubject, withBridgeContext } from './internal/clientContext.js'
 import * as cctp from '../protocols/cctp/evm.js'
 import { execute as executeVerulink } from '../protocols/verulink/source.js'
 import { BridgeError } from '../errors/bridgeErrors.js'
@@ -111,6 +112,7 @@ export async function execute(
   params: ExecuteParameters,
   fetcher: typeof fetch = globalThis.fetch,
 ): Promise<BridgeExecution> {
+  clients = withBridgeContext(clients, 'execute', planSubject(params.plan))
   // Refuse a halted route before any wallet interaction so a pause costs the
   // caller no proving time or fees.
   if (!params.skipRouteStatus) await assertRouteNotPaused(registry, clients, params.plan.route.id)

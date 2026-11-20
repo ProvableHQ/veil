@@ -76,14 +76,14 @@ describe('xReserve lifecycle', () => {
 
     expect(result).toMatchObject({ status: 'COMPLETED' })
     expect(result.nextAction).toBeUndefined()
-    expect(request).toHaveBeenCalledWith({
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
       method: 'getMappingValue',
       params: {
         programId: 'test_usdcx_bridge_v2.aleo',
         mapping: 'nullifier',
         key: `[${Array.from({ length: 32 }, () => '51u8').join(',')}]`,
       },
-    })
+    }))
   })
 
   it('recovers the delivery nonce from the attested payload when older progress omitted it', async () => {
@@ -224,10 +224,10 @@ describe('xReserve lifecycle', () => {
       { progress: { next: 'complete', plan, receipt: ready } },
     )
 
-    expect(request).toHaveBeenCalledWith({
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
       method: 'sendTransaction',
       params: { transaction: JSON.stringify(transaction) },
-    })
+    }))
     expect(result.receipt).toMatchObject({
       status: 'DESTINATION_CONFIRMING',
       destinationTxId: 'at1private',

@@ -332,6 +332,7 @@ export type PrepareParameters = {
  * @property circle.privateMintIdentitySource Whether the quote reserved a store-managed identity or used an externally managed commitment. Store-managed identities must resolve in the store before execution; external ones need no store entry. Older plans without a source are treated as store-managed.
  * @property fees Known fee categories; amounts remain absent until protocol quoting is implemented.
  * @property steps Ordered operations required to complete the transfer.
+ * @property transferId Optional random 16-hex-character identifier minted by `quote` and restored by `recover`. Sent in the `X-Aleo-Bridge` header of Aleo reads so a Provable gateway can group one transfer's requests. Derived from no key, address, or amount. Absent from plans built by `prepare` alone.
  */
 export type BridgePlan = {
   cctp?: CctpOptions | undefined
@@ -352,6 +353,7 @@ export type BridgePlan = {
   privateRecipient: boolean
   fees: BridgeFee[]
   steps: BridgeExecutionStep[]
+  transferId?: string | undefined
 }
 
 /**
@@ -438,6 +440,7 @@ export type BridgeReceipt = {
  * @property version Serialization format version, currently `1`.
  * @property intent Public inputs used to reconstruct the runtime plan.
  * @property route Canonical route and registry version that bound execution.
+ * @property transferId Optional request-grouping identifier carried from the quoted plan. Not a secret; omitted when the plan had none.
  * @property source Prepared or submitted source transactions.
  * @property source.approvalTransactionIds Source token approval transaction identifiers in submission order.
  * @property source.transactionId Irreversible source transfer transaction when submitted.
@@ -459,6 +462,7 @@ export type BridgeCheckpoint = {
     id: string
     registryVersion: string
   }
+  transferId?: string | undefined
   source?: {
     approvalTransactionIds?: readonly string[] | undefined
     replacedApprovalTransactionIds?: readonly string[] | undefined

@@ -28,6 +28,9 @@ import { extractTransitions } from '../../utils/extractTransitions.js'
  * @property onProgress Optional awaited proving/submission checkpoints. Defaults to no reporting.
  * @property feeRecord Optional private credits record plaintext; used only with privateFee.
  *   Managed local writes replace reserved, insufficient, or unavailable records with an eligible one.
+ * @property clientHeaders Optional identifying headers for the requests this execution issues, for usage
+ *   attribution. Defaults to none. Local accounts forward them to the proving config, where they reach
+ *   Provable-operated hosts only. Wallet (RPC) accounts ignore them.
  * @property imports Program id → source for programs reached via dynamic dispatch
  *   that can't be discovered statically. Static imports are auto-discovered. The RPC
  *   path forwards only the ids; the wallet resolves the sources itself.
@@ -42,6 +45,7 @@ export type ExecuteContractParameters = {
   programSource?: string
   imports?: Record<string, string>
   onProgress?: ProvingProgressHandler
+  clientHeaders?: Record<string, string>
 }
 
 /** Transaction id plus per-transition outputs of the confirmed execution. */
@@ -142,6 +146,7 @@ export async function executeContract(
         programSource: params.programSource,
         programImports: params.imports,
         ...(params.onProgress ? { onProgress: params.onProgress } : {}),
+        ...(params.clientHeaders ? { clientHeaders: params.clientHeaders } : {}),
       })
     }
 

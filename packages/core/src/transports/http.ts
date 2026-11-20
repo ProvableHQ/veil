@@ -20,7 +20,7 @@ type HttpTransportConfig = {
  * `X-Veil-Client` in their CORS config, so sending it there can never fail a
  * browser preflight. Unparseable URLs report `false`.
  */
-function isProvableHost(url: string): boolean {
+export function isProvableHost(url: string): boolean {
   try {
     const host = new URL(url).hostname
     return host === 'provable.com' || host.endsWith('.provable.com')
@@ -294,13 +294,13 @@ export function http(
   // and fetch's Headers combines case-variant duplicate keys into one wire
   // value, so a user-supplied header suppresses the default under any casing
   // rather than by exact key.
-  const userSetsClientHeader = Object.keys(headers).some(
-    (k) => k.toLowerCase() === 'x-veil-client',
-  )
+  const userHeaderNames = new Set(Object.keys(headers).map((k) => k.toLowerCase()))
+  const userSetsClientHeader = userHeaderNames.has('x-veil-client')
   const resolvedClientHeader =
     clientHeader !== false && !userSetsClientHeader && isProvableHost(url)
       ? clientHeader || `veil-core/${version}`
       : undefined
+  const sendsClientHeaders = clientHeader !== false && isProvableHost(url)
 
   // Build the config object first so the request closure can read
   // `transportConfig.network` on every call. `switchChain` for local accounts
@@ -310,7 +310,7 @@ export function http(
     name,
     type: 'http',
     network,
-    request: async ({ method, params }) => {
+    request: async ({ method, params, clientHeaders }) => {
       const currentNetwork = String(transportConfig.network ?? 'mainnet')
       const { url: requestUrl, httpMethod, body } = buildUrl(
         url,
@@ -319,11 +319,19 @@ export function http(
         params as Record<string, unknown> | undefined,
       )
 
+      const identifying = sendsClientHeaders
+        ? Object.fromEntries(
+            Object.entries({ 'X-Aleo-Method': method, ...clientHeaders })
+              .filter(([name]) => !userHeaderNames.has(name.toLowerCase())),
+          )
+        : {}
+
       const response = await fetchFn(requestUrl, {
         method: httpMethod,
         headers: {
           'Content-Type': 'application/json',
           ...(resolvedClientHeader ? { 'X-Veil-Client': resolvedClientHeader } : {}),
+          ...identifying,
           ...headers,
         },
         ...(body ? { body } : {}),

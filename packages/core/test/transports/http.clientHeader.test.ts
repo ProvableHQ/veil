@@ -102,6 +102,42 @@ describe('http transport: client header', () => {
     expect(sentHeaders(mockFetch)).not.toHaveProperty('X-Veil-Client')
   })
 
+  it('names the veil method on provable.com hosts', async () => {
+    const { transport, mockFetch } = makeTransport(PROVABLE)
+    await transport.request({ method: 'getLatestHeight' })
+    expect(sentHeaders(mockFetch)['X-Aleo-Method']).toBe('getLatestHeight')
+  })
+
+  it('sends per-request clientHeaders to provable.com hosts', async () => {
+    const { transport, mockFetch } = makeTransport(PROVABLE)
+    await transport.request({ method: 'getLatestHeight', clientHeaders: { 'X-Aleo-Bridge': 'action=quote' } })
+    expect(sentHeaders(mockFetch)['X-Aleo-Bridge']).toBe('action=quote')
+  })
+
+  it('withholds the method and per-request clientHeaders from third-party hosts', async () => {
+    const { transport, mockFetch } = makeTransport(THIRD_PARTY)
+    await transport.request({ method: 'getLatestHeight', clientHeaders: { 'X-Aleo-Bridge': 'action=quote' } })
+    const headers = sentHeaders(mockFetch)
+    expect(headers).not.toHaveProperty('X-Aleo-Method')
+    expect(headers).not.toHaveProperty('X-Aleo-Bridge')
+  })
+
+  it('clientHeader: false withholds the method and per-request clientHeaders', async () => {
+    const { transport, mockFetch } = makeTransport(PROVABLE, { clientHeader: false })
+    await transport.request({ method: 'getLatestHeight', clientHeaders: { 'X-Aleo-Bridge': 'action=quote' } })
+    const headers = sentHeaders(mockFetch)
+    expect(headers).not.toHaveProperty('X-Aleo-Method')
+    expect(headers).not.toHaveProperty('X-Aleo-Bridge')
+  })
+
+  it('configured headers replace a per-request clientHeader of the same name under any casing', async () => {
+    const { transport, mockFetch } = makeTransport(PROVABLE, { headers: { 'x-aleo-bridge': 'mine' } })
+    await transport.request({ method: 'getLatestHeight', clientHeaders: { 'X-Aleo-Bridge': 'action=quote' } })
+    const headers = sentHeaders(mockFetch)
+    expect(headers).not.toHaveProperty('X-Aleo-Bridge')
+    expect(headers['x-aleo-bridge']).toBe('mine')
+  })
+
   it('version constant matches package.json', () => {
     const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'))
     expect(version).toBe(pkg.version)

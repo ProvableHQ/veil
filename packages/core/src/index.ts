@@ -143,7 +143,7 @@ export { extractTransitions, type Decryptor } from './utils/extractTransitions.j
 
 // Transports
 export { createTransport } from './transports/createTransport.js'
-export { http } from './transports/http.js'
+export { http, isProvableHost } from './transports/http.js'
 export { custom } from './transports/custom.js'
 export { fallback } from './transports/fallback.js'
 export { version } from './version.js'

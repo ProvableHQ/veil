@@ -1,3 +1,4 @@
+import { createTransferId, planSubject, withBridgeContext } from './internal/clientContext.js'
 import { readWithdrawalFee } from '../protocols/xreserve/aleoToEvm.js'
 import { quote as quoteVerulink } from '../protocols/verulink/quote.js'
 import * as cctp from '../protocols/cctp/evm.js'
@@ -51,7 +52,9 @@ export async function quote(
 ): Promise<BridgeQuote> {
   // Build the canonical plan before reading live prices. The returned plan is
   // the exact value the caller passes to execution and stores in progress.
-  const prepared = prepare(registry, params)
+  const transferId = createTransferId()
+  const prepared = { ...prepare(registry, params), ...(transferId ? { transferId } : {}) }
+  clients = withBridgeContext(clients, 'quote', planSubject(prepared))
   // Pause flags are read alongside the price so a halted route is reported
   // with the quote rather than discovered at execution.
   const [routeStatus, priced] = await Promise.all([

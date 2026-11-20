@@ -210,6 +210,14 @@ describe('executeContract', () => {
     }))
   })
 
+  it('forwards clientHeaders to proving.execute', async () => {
+    const execute = vi.fn().mockResolvedValue({ transactionId: 'at1x', outputs: [] })
+    const client = { account: { type: 'local', address: 'aleo1abc', sign: vi.fn() }, proving: { execute }, request: vi.fn() } as any
+    const clientHeaders = { 'X-Aleo-Bridge': 'action=execute' }
+    await executeContract(client, { ...baseParams, clientHeaders })
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({ clientHeaders }))
+  })
+
   it('uses default fee of 0n when fee is not provided', async () => {
     const execute = vi.fn().mockResolvedValue({ transactionId: 'at1x', outputs: [] })
     const client = {

@@ -23,6 +23,9 @@ import type { ProvingProgressHandler } from '../../types/proving.js'
  *   wallet can't discover statically. Static imports in the program's `import` block are
  *   auto-discovered.
  * @property onProgress Optional awaited callback for proving and submission boundaries. Defaults to no reporting.
+ * @property clientHeaders Optional identifying headers for the requests this write issues, for usage
+ *   attribution. Defaults to none. Local accounts forward them to the proving config and the broadcast,
+ *   where they reach Provable-operated hosts only. Wallet (RPC) accounts ignore them.
  */
 export type WriteContractParameters = {
   program: string
@@ -32,6 +35,7 @@ export type WriteContractParameters = {
   feeRecord?: string
   imports?: string[]
   onProgress?: ProvingProgressHandler | undefined
+  clientHeaders?: Record<string, string> | undefined
 }
 
 /** Transaction id (`at1...`) of the broadcast execution. */
@@ -119,6 +123,7 @@ export async function writeContract(
       ...(params.feeRecord ? { feeRecord: params.feeRecord } : {}),
       imports: params.imports,
       ...(params.onProgress ? { onProgress: params.onProgress } : {}),
+      ...(params.clientHeaders ? { clientHeaders: params.clientHeaders } : {}),
     })
 
     // Await the checkpoint before broadcast so a persistent store can save the
@@ -128,6 +133,7 @@ export async function writeContract(
     const transactionId = await client.request({
       method: 'sendTransaction',
       params: { transaction: JSON.stringify(tx) },
+      ...(params.clientHeaders ? { clientHeaders: params.clientHeaders } : {}),
     }) as string
     await params.onProgress?.({ type: 'transaction-submitted', transactionId })
     return transactionId

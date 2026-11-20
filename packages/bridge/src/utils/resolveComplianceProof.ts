@@ -1,3 +1,4 @@
+import { baseWalletClient } from '../actions/internal/clientContext.js'
 import { freezelistProofRequest, type Client, type FreezelistProofInput } from '@provablehq/veil-core'
 import { BridgeError } from '../errors/bridgeErrors.js'
 import type { AleoWalletClient } from '../types/aleo.js'
@@ -82,8 +83,9 @@ export async function resolveComplianceProof(
   if (!publicClient) throw new BridgeError('Automatic local compliance proofs require an Aleo public client')
   const root = await publicClient.request({ method: 'getMappingValue', params: { programId: freezelistProgram, mapping: 'freeze_list_root', key: '1u8' } })
   if (typeof root !== 'string' || !/^\d+field$/.test(root)) throw new BridgeError(`Invalid current freezelist root for ${freezelistProgram}`)
-  let cache = caches.get(walletClient)
-  if (!cache) { cache = new Map(); caches.set(walletClient, cache) }
+  const owner = baseWalletClient(walletClient)
+  let cache = caches.get(owner)
+  if (!cache) { cache = new Map(); caches.set(owner, cache) }
   const key = `${asset.chainId}:${publicClient.transport.config.network ?? ''}:${freezelistProgram}`
   let entry = cache.get(key)
   if (!entry || entry.root !== root) {

@@ -1,3 +1,4 @@
+import { planSubject, withBridgeContext } from './internal/clientContext.js'
 import * as cctp from '../protocols/cctp/evm.js'
 import { context as verulinkContext } from '../protocols/verulink/common.js'
 import { validateAleoSource } from '../protocols/verulink/packets.js'
@@ -47,6 +48,7 @@ export async function resume(
   if (params.progress.next !== 'resume' || receipt.status !== 'SOURCE_SUBMISSION_PENDING') {
     throw new BridgeError('Bridge progress has no source submission to resume')
   }
+  clients = withBridgeContext(clients, 'resume', planSubject(plan))
   // A route paused since the checkpoint was written would reject the
   // rebroadcast on chain, so refuse before touching the wallet or node.
   if (!params.skipRouteStatus) await assertRouteNotPaused(registry, clients, plan.route.id)

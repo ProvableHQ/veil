@@ -47,6 +47,8 @@ export type ProvingProgressHandler = (event: ProvingProgressEvent) => void | Pro
  *   adapters MUST use this exact record when supplied with privateFee.
  * @property {string[]} [imports] - Names of programs reached via dynamic dispatch that the prover can't discover statically.
  * @property onProgress Optional awaited callback for proving lifecycle boundaries. Defaults to no reporting.
+ * @property clientHeaders Optional identifying headers for the network and prover requests of this build.
+ *   Defaults to none. Adapters send them to Provable-operated hosts only, or ignore them.
  */
 export type BuildTransactionOptions = {
   programName: string
@@ -56,6 +58,7 @@ export type BuildTransactionOptions = {
   feeRecord?: string | undefined
   imports?: string[] | undefined
   onProgress?: ProvingProgressHandler | undefined
+  clientHeaders?: Record<string, string> | undefined
 }
 
 /**
@@ -88,6 +91,8 @@ export type SimulateOptions = {
  * @property programImports Import program name → source, for imports the prover cannot fetch.
  * @property onProgress Optional awaited checkpoint callback, absent by default. Implementations MUST
  *   emit transaction-prepared with the full proved transaction before broadcasting when supplied.
+ * @property clientHeaders Optional identifying headers for the network, prover, broadcast, and confirmation
+ *   requests of this execution. Defaults to none. Adapters send them to Provable-operated hosts only, or ignore them.
  */
 export type ExecuteOptions = {
   onProgress?: ProvingProgressHandler
@@ -101,6 +106,7 @@ export type ExecuteOptions = {
   feeRecord?: string | undefined
   programSource?: string | undefined
   programImports?: Record<string, string> | undefined
+  clientHeaders?: Record<string, string> | undefined
 }
 
 /** Result of a local simulation, before ABI parsing — outputs are raw Aleo-encoded strings. */

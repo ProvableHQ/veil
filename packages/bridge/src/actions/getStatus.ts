@@ -1,3 +1,4 @@
+import { planSubject, withBridgeContext } from './internal/clientContext.js'
 import * as cctp from '../protocols/cctp/evm.js'
 import * as verulink from '../protocols/verulink/lifecycle.js'
 import { transactionStatus } from '@provablehq/veil-core'
@@ -46,6 +47,7 @@ export async function getStatus(
 ): Promise<BridgeReceipt> {
   const route = resolveTransferRoute(registry, params.plan)
   const receipt = params.receipt
+  clients = withBridgeContext(clients, 'status', planSubject(params.plan))
   if (receipt.protocol !== params.plan.protocol || receipt.protocolState.routeId !== params.plan.route.id) {
     throw new BridgeError('Bridge receipt does not match the prepared route')
   }
