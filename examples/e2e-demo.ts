@@ -24,7 +24,7 @@ import {
 import { aleoAgentTools } from '../packages/core/src/agent/index.js'
 import { loadNetwork, type AleoSdk } from '../packages/provable-sdk/src/index.js'
 import { ApiClient, shieldSwapAlgorithmGrants } from '../packages/shield-swap/src/index.js'
-import { createAleoClient as createBridgeAleoClient, createBridgeClient, unshieldFreezelistProofGrant, hyperlaneCommitmentToLimbs, readHyperlaneClaimableAmount, DEFAULT_BRIDGE_REGISTRY } from '../packages/bridge/src/index.js'
+import { createAleoClient as createBridgeAleoClient, createBridgeClient, unshieldFreezelistProofGrant, calculateHyperlanePrivateTransferAmount, hyperlaneCommitmentToLimbs, readHyperlaneClaimableAmount, DEFAULT_BRIDGE_REGISTRY } from '../packages/bridge/src/index.js'
 
 const API_URL = 'https://edge.provable.com/api/v2'
 
@@ -39,6 +39,10 @@ describe.runIf(process.env.VEIL_INTEGRATION === '1')('Public Shield Swap market 
 // Wallet-only helpers are deterministic; actual proof resolution happens in
 // a connected wallet after the matching connect-time grant is approved.
 describe('Wallet freezelist proof setup', () => {
+  it('deducts the included private outbound Hyperlane fee from gross token funding', () => {
+    const amounts = calculateHyperlanePrivateTransferAmount({ amountAtomic: 10_000n, feeBps: 25 })
+    expect(amounts).toEqual({ grossAmountAtomic: 10_000n, protocolFeeAtomic: 25n, netAmountAtomic: 9975n })
+  })
   it('encodes a wallet-issued Hyperlane commitment for the private claim ABI', () => {
     // The first half is the low limb; each half is little-endian. A reviewed
     // private route and separate claim grants are required before execution.

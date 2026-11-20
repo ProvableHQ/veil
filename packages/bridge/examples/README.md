@@ -696,3 +696,8 @@ The same example exposes `recoverPrivateHyperlaneExample` for read-only recovery
 from the Aleo `claimable` mapping, including when source transaction/message ids
 are unavailable. The guide also demonstrates bounded discovery of existing
 address encodings by counter without Circle API requests.
+
+`quotePrivateHyperlaneOutboundExample` reads a reviewed private outbound fee
+mapping, reports gross token funding and net destination tokens, and sums both
+private dispatch hook payments. It is read-only; it does not submit the private
+transition or replace the public outbound execution examples.

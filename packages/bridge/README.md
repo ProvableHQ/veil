@@ -64,6 +64,12 @@ The bundled production routes remain public-only until their private claim
 deployments are verified. See [private Hyperlane setup and recovery](docs/hyperlane-private-mint.md)
 and the [example](examples/private-hyperlane.ts).
 
+Private outbound fee accounting is available separately through
+`hyperlane.aleo.quotePrivateTransfer`, which reads the reviewed Aleo fee mapping,
+deducts the included token fee from the gross amount, and sums both private
+dispatch hook payments. It does not enable `transfer_remote_private` execution;
+current outbound execution uses the public transitions. See [private outbound fees](docs/hyperlane-private-mint.md#account-for-private-outbound-transfer-fees).
+
 ## Supported transfers
 
 | Source | Destination | Asset received | Provider |

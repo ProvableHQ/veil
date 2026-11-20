@@ -1,5 +1,9 @@
+import type { Client } from '@provablehq/veil-core'
 import {
   hyperlanePrivateClaimGrants,
+  hyperlane,
+  type BridgePlan,
+  type BridgeRegistry,
   type BridgeCheckpoint,
   type BridgeClient,
   type BridgeProgress,
@@ -65,4 +69,20 @@ export async function recoverPrivateHyperlaneExample(bridge: BridgeClient, check
   // Do not requote or repeat a source transfer. Aleo claimable state determines
   // readiness; the caller explicitly authorizes complete() only when appropriate.
   return bridge.recover({ checkpoint })
+}
+
+
+/**
+ * Inspects private outbound token deductions and both dispatch hook payments without signing.
+ * Requires an injected registry with reviewed private ABI and exact fee mapping metadata.
+ * @param publicClient Supplies Aleo reads for the reviewed source network.
+ * @param options Supplies the registry and outbound plan whose amount is the gross token spend.
+ * @returns Net destination tokens and separate gross token, dispatch credits, and unknown execution fee requirements.
+ * @throws Error When the deployment, on-chain token fee, hook configuration, or arithmetic is invalid.
+ * @example const quote = await quotePrivateHyperlaneOutboundExample(publicClient, { registry, plan })
+ */
+export async function quotePrivateHyperlaneOutboundExample(publicClient: Client, options: { registry: BridgeRegistry; plan: BridgePlan }) {
+  // The included protocol fee reduces net destination tokens; the token record
+  // covers the gross spend. Private outbound execution remains a separate integration.
+  return hyperlane.aleo.quotePrivateTransfer(publicClient, options)
 }

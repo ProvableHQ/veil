@@ -175,3 +175,87 @@ watermark. Network or derivation failures stop the scan and propagate to the
 caller instead of being treated as absent entries. Cancellation is checked
 between derivations and reads. Discovery never issues, consumes, or releases an
 identity, submits a claim, or caches mutable balances.
+
+
+## Account for private outbound transfer fees
+
+`transfer_remote_private` is a separate eleven-input outbound ABI. The SDK's
+current execution helpers submit only public `transfer_remote` or
+`transfer_remote_as_signer` calls. The private fee helper below provides
+read-only accounting; it does not enable private outbound execution.
+
+Bridge quotes read Aleo or the source protocol directly. They do not fetch
+quotes from wallet-services-api. Existing public Aleo Hyperlane quotes report
+their public hook gas payment and leave Aleo execution fees unknown.
+
+For a reviewed private outbound deployment, use
+`hyperlane.aleo.quotePrivateTransfer(publicClient, { registry, plan })`.
+The plan's amount is the **gross** token record spend. The helper reads the
+selected warp's fee mapping and applies:
+
+```text
+protocol_fee = floor(gross_amount * fee_bps / 10000)
+net_amount = gross_amount - protocol_fee
+```
+
+The calculation splits quotient and remainder to match the bounded u128
+contract arithmetic. Rates must be between 0 and 9999 bps. The fee is included
+in the gross token record spend; do not add it to that record requirement.
+`amountOut` and `destinationAmountAtomic` report the net destination amount,
+including downward truncation when converting to fewer remote decimals.
+
+The newer local testnet example at
+[aleo-dev-toolkit commit c8b413b](https://github.com/ProvableHQ/aleo-dev-toolkit/blob/c8b413bef975e736d9c9f52d4f4ce6113f8846ae/examples/react-app/src/lib/hyperlaneAleoTestnet.ts)
+reads `private_transfer_fee_bps__[false]`. The older shield-core reference reads
+`private_transfer_fee_bps[true]`. The SDK does not guess between them. In addition
+to existing reviewed outbound router, hook, gas, and decimal metadata, the
+injected route must explicitly provide:
+
+| Field | Required value |
+| --- | --- |
+| `aleoPrivateTransferAbi` | `transfer_remote_private_v1` |
+| `aleoPrivateTransferCommit` | Lowercase 40-character upstream commit pinning the verified private deployment |
+| `aleoPrivateTransferFeeMapping` | Exact deployed fee mapping, such as `private_transfer_fee_bps__` |
+| `aleoPrivateTransferFeeKey` | Exact boolean key, such as `false` |
+
+Only an absent entry in that reviewed mapping means zero. Failed reads,
+malformed u16 values, and rates of 10000 bps or more reject the quote. Each call
+reads the rate again; mutable fee values are not cached. The bundled registry
+has no private-outbound ABI activation metadata.
+
+```ts
+const privateQuote = await hyperlane.aleo.quotePrivateTransfer(publicClient, {
+  registry,
+  plan,
+})
+
+console.log({
+  grossTokenRecord: privateQuote.tokenRecordAmountAtomic,
+  includedTokenFee: privateQuote.protocolFeeAtomic,
+  netDestinationTokens: privateQuote.destinationAmountAtomic,
+  dispatchCreditsRecord: privateQuote.dispatchCreditsRecordMicrocredits,
+  executionFee: privateQuote.executionFeeMicrocredits, // null until authorized pricing
+})
+```
+
+Private dispatch invokes both the effective application hook (custom hook, or
+the default when none is selected) and the required mailbox hook. The helper
+reads their hook types and current gas configurations, sums both payments, and
+counts both invocations even when the same hook is used twice. No-op and
+Merkle-tree hooks add no credits payment; gas-paymaster hooks use the on-chain
+formula and the 50000 gas-limit fallback. Unsupported hook types, missing
+configuration, or u128/u64 arithmetic overflow reject the quote.
+
+The token record must cover the gross amount. The dispatch credits record must
+cover the summed hook payments. Aleo execution fees are separate and remain
+unknown in an unauthenticated fee quote, so `totalMicrocredits` stays null.
+`planHyperlanePrivateTransferFees` can add a separately priced execution fee to
+the credits budget. When paying execution fees privately, its credits record
+must be distinct from the record consumed by private dispatch.
+
+An execution integration MUST reread the fee and revalidate the reviewed
+metadata, hooks, allowances, record funding, and net amount before authorization.
+Supply the freshly checked fee rate at input 10 and sender exclusion proofs at
+input 9. The inbound claim's secret at input 3 is unrelated to this outbound
+call. Existing public transfer builders do not accept private mode and must not
+be used to submit `transfer_remote_private`.

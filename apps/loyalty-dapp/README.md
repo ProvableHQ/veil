@@ -45,3 +45,9 @@ A funded encoding can be recovered without source transaction or message ids;
 bounded counter scans re-derive existing encodings in the wallet host or local
 account and query Aleo directly. Zero balance is distinct from an absent entry
 and does not prove completion. See the bridge guide above for discovery and retry.
+
+Private outbound Hyperlane fee inspection uses
+`hyperlane.aleo.quotePrivateTransfer` with reviewed private ABI and fee-mapping
+metadata. The token protocol fee is included in the gross record spend and
+reduces destination tokens; dispatch credits and Aleo execution fees are
+separate. The current SDK outbound execution helpers remain public-only.
