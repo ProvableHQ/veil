@@ -684,3 +684,10 @@ an interruption. Do not delete submission-attempt markers to force a retry.
 A stale lock requires checking that the original process has stopped first.
 The second leg uses the first leg's verified net amount, and completes only
 after an accepted public ALEO transfer to the original account.
+
+## Private Hyperlane delivery
+
+[`private-hyperlane.ts`](./private-hyperlane.ts) accepts an injected bridge client
+with a reviewed private-claim route and a wallet-issued address encoding. It
+quotes by default; explicit execution follows message delivery, submits the
+private claim, and verifies acceptance. See [deployment requirements and wallet grants](../docs/hyperlane-private-mint.md).

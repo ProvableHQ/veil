@@ -1,3 +1,4 @@
+import { hyperlaneRecipient } from '../protocols/hyperlane/privateMint.js'
 import { planSubject, withBridgeContext } from './internal/clientContext.js'
 import * as cctp from '../protocols/cctp/evm.js'
 import { context as verulinkContext } from '../protocols/verulink/common.js'
@@ -11,7 +12,6 @@ import * as evmHyperlane from '../protocols/hyperlane/evm.js'
 import * as evmToAleoXReserve from '../protocols/xreserve/evmToAleo.js'
 import type { ResumeParameters, BridgeExecution } from '../types/actions.js'
 import type { BridgeRegistry, BridgeReceipt } from '../types/protocol.js'
-import { aleoAddressToBytes32 } from '../utils/xreserve.js'
 import { createBridgeCheckpoint } from './createBridgeCheckpoint.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 import { resolveCircleOptions } from './internal/circleOptions.js'
@@ -152,7 +152,7 @@ export async function resume(
       requireEvmClientWithWallet(registry, clients, route.sourceChain.id, 'resume Hyperlane transfer'),
       {
         plan,
-        recipientBytes32: aleoAddressToBytes32(plan.recipient),
+        recipientBytes32: hyperlaneRecipient(registry, plan),
         resume: receipt,
         pollingIntervalMs: params.pollingIntervalMs,
         confirmationTimeoutMs: params.confirmationTimeoutMs,

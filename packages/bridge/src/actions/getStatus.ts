@@ -1,3 +1,4 @@
+import { hyperlaneRecipient, privateClaimStatus } from '../protocols/hyperlane/privateMint.js'
 import { planSubject, withBridgeContext } from './internal/clientContext.js'
 import * as cctp from '../protocols/cctp/evm.js'
 import * as verulink from '../protocols/verulink/lifecycle.js'
@@ -10,7 +11,7 @@ import type { BridgeReceipt, BridgeRegistry } from '../types/protocol.js'
 import type { XReserveHttpTransport } from '../types/xreserve.js'
 import { getAttestation, getSourceStatus } from '../protocols/xreserve/evmToAleo.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
-import { aleoAddressToBytes32, xReserveDepositNonceFromPayload } from '../utils/xreserve.js'
+import { xReserveDepositNonceFromPayload } from '../utils/xreserve.js'
 import { getSourceStatus as getEvmHyperlaneSourceStatus } from '../protocols/hyperlane/evm.js'
 import { getSourceStatus as getSolanaHyperlaneSourceStatus } from '../protocols/hyperlane/solana.js'
 import { readDestinationBalance } from './internal/readDestinationBalance.js'
@@ -106,7 +107,7 @@ export async function getStatus(
       registry,
       requireEvmClient(registry, clients, route.sourceChain.id),
       params.plan,
-      aleoAddressToBytes32(params.plan.recipient),
+      hyperlaneRecipient(registry, params.plan),
       receipt,
     )
   }
@@ -120,6 +121,11 @@ export async function getStatus(
       requireSolanaClient(registry, clients, route.sourceChain.id),
       receipt,
     )
+  }
+
+  if (route.route.protocol === 'hyperlane' && params.plan.mintMode === 'private'
+    && ['DELIVERY_PENDING', 'DESTINATION_ACTION_REQUIRED', 'DESTINATION_CONFIRMING'].includes(receipt.status)) {
+    return privateClaimStatus(registry, clients, params.plan, receipt)
   }
 
   if (receipt.status === 'DELIVERY_PENDING'

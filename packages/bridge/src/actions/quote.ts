@@ -1,3 +1,4 @@
+import { hyperlaneRecipient } from '../protocols/hyperlane/privateMint.js'
 import { createTransferId, planSubject, withBridgeContext } from './internal/clientContext.js'
 import { readWithdrawalFee } from '../protocols/xreserve/aleoToEvm.js'
 import { quote as quoteVerulink } from '../protocols/verulink/quote.js'
@@ -12,7 +13,6 @@ import {
 import type { BridgePlan, BridgeRegistry } from '../types/protocol.js'
 import type { QuoteParameters, BridgeQuote, BridgeQuotePricing } from '../types/actions.js'
 import { getRouteStatus } from './getRouteStatus.js'
-import { aleoAddressToBytes32 } from '../utils/xreserve.js'
 import * as aleoHyperlane from '../protocols/hyperlane/aleo.js'
 import * as evmHyperlane from '../protocols/hyperlane/evm.js'
 import * as solanaHyperlane from '../protocols/hyperlane/solana.js'
@@ -110,7 +110,7 @@ async function quoteRoute(
     const client = requireEvmClient(registry, clients, chainId)
     const quote = await evmHyperlane.quote(registry, client, {
       plan,
-      recipientBytes32: aleoAddressToBytes32(plan.recipient),
+      recipientBytes32: hyperlaneRecipient(registry, plan),
     })
     return { kind: 'evm-hyperlane', plan, ...quote }
   }

@@ -226,3 +226,7 @@ export { formatDecimalAmount, parseDecimalAmount } from './utils/units.js'
 export type { EvmCctpTransferQuote, EvmCctpTransferExecution } from './types/cctp.js'
 
 export type { VerulinkQuote, VerulinkExecution } from './types/verulink.js'
+
+export type { HyperlaneAddressEncoding, HyperlaneOptions, HyperlaneClaimOptions } from './types/hyperlane.js'
+export { hyperlanePrivateClaimGrants } from './protocols/hyperlane/privateMint.js'
+export { hyperlaneCommitmentToLimbs } from './utils/hyperlane.js'

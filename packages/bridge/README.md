@@ -52,6 +52,16 @@ now includes additional chains and routes; filter by protocol or endpoints if
 an application only supports the existing integrations. Filtering limits
 runtime discovery but does not narrow the exported TypeScript unions.
 
+## Private Hyperlane delivery
+
+Opt into commitment-based EVM/Solana-to-Aleo delivery with
+`hyperlane: { addressEncoding: { commitmentHex } }` on a reviewed private route.
+The encoding stays fixed through quoting, execution, and recovery. After
+message delivery, `complete` submits the recipient-authorized Aleo claim.
+The bundled production routes remain public-only until their private claim
+deployments are verified. See [private Hyperlane setup and recovery](docs/hyperlane-private-mint.md)
+and the [example](examples/private-hyperlane.ts).
+
 ## Supported transfers
 
 | Source | Destination | Asset received | Provider |

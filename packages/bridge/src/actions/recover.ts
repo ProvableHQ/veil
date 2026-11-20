@@ -1,3 +1,4 @@
+import { hyperlaneRecipient } from '../protocols/hyperlane/privateMint.js'
 import { isTransferId, planSubject, withBridgeContext } from './internal/clientContext.js'
 import { isRegistryVersionCompatible } from '../registry/compatibility.js'
 import * as cctp from '../protocols/cctp/evm.js'
@@ -9,7 +10,6 @@ import type { BridgeProgress, BridgeReceipt, BridgeRegistry } from '../types/pro
 import type { XReserveHttpTransport } from '../types/xreserve.js'
 import { recoverSourceCheckpoint } from '../protocols/xreserve/evmToAleo.js'
 import { recoverSourceCheckpoint as recoverEvmHyperlaneSource } from '../protocols/hyperlane/evm.js'
-import { aleoAddressToBytes32 } from '../utils/xreserve.js'
 import { getStatus } from './getStatus.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 import { prepare } from './prepare.js'
@@ -129,7 +129,7 @@ export async function recover(
     if (!checkpoint.source?.transactionId) {
       throw new BridgeError('Bridge checkpoint contains no submitted source transaction')
     }
-    if (checkpoint.destination || (checkpoint.source.approvalTransactionIds?.length ?? 0) > 0) {
+    if ((checkpoint.destination && plan.mintMode !== 'private') || (checkpoint.source.approvalTransactionIds?.length ?? 0) > 0) {
       throw new BridgeError('Bridge checkpoint contains transactions that are invalid for a Solana source route')
     }
     const { blockhash, lastValidBlockHeight } = checkpoint.source
@@ -154,22 +154,22 @@ export async function recover(
       },
       signal: params.signal,
     })
-    return toBridgeProgress(plan, receipt)
+    return toBridgeProgress(plan, await recoveredPrivateClaim(registry, clients, client, params, plan, receipt))
   }
   if (route.route.protocol === 'hyperlane' && route.sourceChain.family === 'evm') {
     // EVM Hyperlane may have one or more token approvals before its dispatch.
     // The protocol helper determines which submitted boundary was reached.
-    if (checkpoint.destination) {
+    if (checkpoint.destination && plan.mintMode !== 'private') {
       throw new BridgeError('Bridge checkpoint contains a destination transaction that is invalid for this Hyperlane route')
     }
     receipt = await recoverEvmHyperlaneSource(
       registry,
       requireEvmClient(registry, clients, route.sourceChain.id),
       plan,
-      aleoAddressToBytes32(plan.recipient),
+      hyperlaneRecipient(registry, plan),
       checkpoint,
     )
-    return toBridgeProgress(plan, receipt)
+    return toBridgeProgress(plan, await recoveredPrivateClaim(registry, clients, client, params, plan, receipt))
   }
   if (route.route.protocol !== 'xreserve'
     || route.sourceChain.family !== 'evm'
@@ -234,4 +234,26 @@ export async function recover(
     }
   }
   return toBridgeProgress(plan, receipt)
+}
+
+/** Restores an already submitted private claim without requesting another signature. */
+async function recoveredPrivateClaim(
+  registry: BridgeRegistry, clients: BridgeChainClients, client: XReserveHttpTransport,
+  params: RecoverParameters, plan: import('../types/protocol.js').BridgePlan, receipt: BridgeReceipt,
+): Promise<BridgeReceipt> {
+  if (plan.protocol !== 'hyperlane' || plan.mintMode !== 'private') return receipt
+  const destination = params.checkpoint.destination
+  if (destination?.preparedTransaction || (destination && !destination.transactionId)) {
+    throw new BridgeError('Hyperlane private recovery requires a submitted destination transaction id')
+  }
+  if (receipt.status !== 'DELIVERY_PENDING') {
+    if (destination) throw new BridgeError('Cannot verify the source of the saved Hyperlane private claim yet; retain the checkpoint and retry')
+    return receipt
+  }
+  return getStatus(registry, clients, client, {
+    plan, receipt: destination?.transactionId
+      ? { ...receipt, status: 'DESTINATION_CONFIRMING', destinationTxId: destination.transactionId }
+      : receipt,
+    signal: params.signal,
+  })
 }

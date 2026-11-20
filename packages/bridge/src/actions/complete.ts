@@ -1,3 +1,4 @@
+import { completePrivateClaim } from '../protocols/hyperlane/privateMint.js'
 import { planSubject, withBridgeContext } from './internal/clientContext.js'
 import * as cctp from '../protocols/cctp/evm.js'
 import * as verulink from '../protocols/verulink/lifecycle.js'
@@ -17,7 +18,7 @@ import { assertRouteNotPaused } from './internal/routePauseGuard.js'
 /**
  * Submits the destination-chain transaction required to receive bridged funds.
  *
- * Completes an attested xReserve private mint, manual CCTP mint, or public
+ * Completes a Hyperlane private claim, attested xReserve private mint, manual CCTP mint, or public
  * Verulink claim. The destination wallet signs and submits; Aleo claims also
  * require proving.
  *
@@ -56,6 +57,7 @@ export async function complete(
   } else {
     throw new BridgeError('Bridge completion requires recovered progress')
   }
+  if (params.hyperlane !== undefined && plan.protocol !== 'hyperlane') throw new BridgeError('Hyperlane claim options require a Hyperlane route')
   clients = withBridgeContext(clients, 'complete', planSubject(plan))
   // The destination mint asserts the same pause flags, so refuse before any
   // wallet interaction when the route has been halted since the deposit.
@@ -66,6 +68,7 @@ export async function complete(
     })
   }
   const route = resolveTransferRoute(registry, plan)
+  if (plan.protocol === 'hyperlane') return { kind: 'aleo-hyperlane', ...await completePrivateClaim(registry, clients, plan, receipt, params) }
   if (plan.protocol === 'verulink') return verulink.complete(registry, clients, fetcher, { ...params, progress: undefined, plan, receipt })
   if (receipt.status !== 'DESTINATION_ACTION_REQUIRED'
     || receipt.nextAction?.kind !== 'xreserve-private-mint'

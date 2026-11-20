@@ -32,3 +32,10 @@ proofs automatically. Omit `merkleProof` and supply the matching
 `unshieldFreezelistProofGrant` or `xReserveBurnFreezelistProofGrant` when connecting
 the wallet. Local SDK clients generate and cache the witness instead. See
 [Bridge compliance proofs](../../packages/bridge/README.md#automatic-compliance-proofs).
+
+Private Hyperlane bridge integrations use a wallet-issued address encoding and
+separate recipient claim grants from `hyperlanePrivateClaimGrants`. A message
+delivery still requires the recipient claim before funds are spendable. The
+loyalty app has no bridge routes configured; add a reviewed private destination
+registry before offering this flow. See [private Hyperlane delivery](../../packages/bridge/docs/hyperlane-private-mint.md)
+and the [example](../../packages/bridge/examples/private-hyperlane.ts).

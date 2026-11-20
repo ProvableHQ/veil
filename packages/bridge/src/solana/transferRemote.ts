@@ -1,3 +1,5 @@
+import { validateHyperlaneAddressEncoding } from '../utils/hyperlane.js'
+import type { HyperlaneAddressEncoding } from '../types/hyperlane.js'
 import { hexToBytes } from 'viem'
 import { BridgeError } from '../errors/bridgeErrors.js'
 import type { SolanaHyperlaneRouteMetadata, SolanaHyperlaneTransferMetadata } from '../types/solana.js'
@@ -49,6 +51,7 @@ export type SolanaAccountMeta = {
  * @property senderAddress Base58 address of the wallet funding the transfer; signs and pays rent.
  * @property uniqueMessageAddress Base58 address of a fresh, caller-supplied signer that seeds the
  * dispatched-message and gas-payment program-derived addresses and proves transaction uniqueness.
+ * @property addressEncoding Optional wallet-issued private commitment. Omit to serialize the Aleo recipient address. Route support must be validated by the calling action.
  * @property recipientAleoAddress Aleo `aleo1…` address receiving the transfer on the destination chain.
  * @property amountLamports Source amount in atomic units; lamports for native SOL and mint units for SPL collateral.
  * @example
@@ -62,6 +65,7 @@ export type BuildTransferRemoteParameters<
   metadata: Metadata
   senderAddress: string
   uniqueMessageAddress: string
+  addressEncoding?: HyperlaneAddressEncoding | undefined
   recipientAleoAddress: string
   amountLamports: bigint
 }
@@ -191,6 +195,9 @@ export async function buildTransferRemoteInstruction(
   params: BuildTransferRemoteParameters<SolanaHyperlaneTransferMetadata>,
 ): Promise<{ programAddress: string; accounts: SolanaAccountMeta[]; data: Uint8Array }> {
   const { metadata } = params
+  const publicRecipient = aleoAddressToBytes32(params.recipientAleoAddress)
+  if (params.addressEncoding !== undefined) validateHyperlaneAddressEncoding(params.addressEncoding)
+  const recipient = params.addressEncoding === undefined ? publicRecipient : `0x${params.addressEncoding.commitmentHex}` as const
   const kit = await loadKit()
   const addressEncoder = kit.getAddressEncoder()
   const uniqueMessageBytes = addressEncoder.encode(kit.address(params.uniqueMessageAddress))
@@ -215,7 +222,7 @@ export async function buildTransferRemoteInstruction(
   data.set(PROGRAM_INSTRUCTION_DISCRIMINATOR, 0)
   data[8] = TRANSFER_REMOTE_VARIANT_TAG
   writeU32LE(data, 9, metadata.destinationDomain)
-  data.set(hexToBytes(aleoAddressToBytes32(params.recipientAleoAddress)), 13)
+  data.set(hexToBytes(recipient), 13)
   writeU256LE(data, 45, params.amountLamports)
 
   // SEALEVEL_NOTES.md §2: the ordered account table, interleaving
