@@ -57,7 +57,9 @@ runtime discovery but does not narrow the exported TypeScript unions.
 Opt into commitment-based EVM/Solana-to-Aleo delivery with
 `hyperlane: { addressEncoding: { commitmentHex } }` on a reviewed private route.
 The encoding stays fixed through quoting, execution, and recovery. After
-message delivery, `complete` submits the recipient-authorized Aleo claim.
+the warp route's `claimable` mapping shows funds, `complete` submits the recipient-authorized Aleo claim.
+Recovery and bounded counter scans use that mapping without Circle API calls or
+a source transaction/message id.
 The bundled production routes remain public-only until their private claim
 deployments are verified. See [private Hyperlane setup and recovery](docs/hyperlane-private-mint.md)
 and the [example](examples/private-hyperlane.ts).

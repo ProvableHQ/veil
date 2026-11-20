@@ -24,7 +24,7 @@ import {
 import { aleoAgentTools } from '../packages/core/src/agent/index.js'
 import { loadNetwork, type AleoSdk } from '../packages/provable-sdk/src/index.js'
 import { ApiClient, shieldSwapAlgorithmGrants } from '../packages/shield-swap/src/index.js'
-import { createAleoClient as createBridgeAleoClient, createBridgeClient, unshieldFreezelistProofGrant, hyperlaneCommitmentToLimbs, DEFAULT_BRIDGE_REGISTRY } from '../packages/bridge/src/index.js'
+import { createAleoClient as createBridgeAleoClient, createBridgeClient, unshieldFreezelistProofGrant, hyperlaneCommitmentToLimbs, readHyperlaneClaimableAmount, DEFAULT_BRIDGE_REGISTRY } from '../packages/bridge/src/index.js'
 
 const API_URL = 'https://edge.provable.com/api/v2'
 
@@ -44,6 +44,13 @@ describe('Wallet freezelist proof setup', () => {
     // private route and separate claim grants are required before execution.
     const addressEncoding = { commitmentHex: `01${'00'.repeat(15)}02${'00'.repeat(15)}` }
     expect(hyperlaneCommitmentToLimbs(addressEncoding)).toEqual([1n, 2n])
+  })
+  it('requires reviewed private routes before querying Aleo for a Hyperlane encoding', async () => {
+    // Supply an injected reviewed private deployment before discovering or
+    // recovering encodings through its claimable mapping. Default routes are public-only.
+    await expect(readHyperlaneClaimableAmount(DEFAULT_BRIDGE_REGISTRY, {}, {
+      routeId: 'hyperlane:ethereum/eth->aleo/eth', addressEncoding: { commitmentHex: '11'.repeat(32) },
+    })).rejects.toThrow(/reviewed private claim metadata/)
   })
   it('includes constrained freezelist grants for automatic Shield Swap proofs', () => {
     const grants = shieldSwapAlgorithmGrants()

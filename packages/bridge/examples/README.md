@@ -691,3 +691,8 @@ after an accepted public ALEO transfer to the original account.
 with a reviewed private-claim route and a wallet-issued address encoding. It
 quotes by default; explicit execution follows message delivery, submits the
 private claim, and verifies acceptance. See [deployment requirements and wallet grants](../docs/hyperlane-private-mint.md).
+
+The same example exposes `recoverPrivateHyperlaneExample` for read-only recovery
+from the Aleo `claimable` mapping, including when source transaction/message ids
+are unavailable. The guide also demonstrates bounded discovery of existing
+address encodings by counter without Circle API requests.

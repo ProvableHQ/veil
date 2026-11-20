@@ -31,7 +31,7 @@ the active inbound route:
 | `privateMintEncoding` | `address_commitment_v1` |
 | `privateMintAbi` | `claim_private_v1` for the five-input ABI below |
 | `privateMintProgram` | Verified destination warp program id |
-| `privateMintMapping` | Verified `[u128; 2] -> u128` claimable-balance mapping |
+| `privateMintMapping` | `claimable` on the verified warp route (`[u128; 2] -> u128`), or an explicitly reviewed custom mapping name |
 | `privateMintFreezelistProgram` | Program whose exclusion proofs the claim checks |
 | `privateMintCommit` | Lowercase 40-character upstream commit pinning the deployment evidence |
 | `destinationRouter` | The same program, optionally followed by `/aleo1…` |
@@ -81,8 +81,8 @@ receipt with `bridge.getStatus` or `bridge.wait`. EVM uses `0x` followed by the
 commitment bytes; Solana copies the same bytes into its recipient slot. Neither
 path reverses the bytes or changes the source call's argument layout.
 
-Message delivery alone does not complete a private transfer. The SDK reads the
-claimable balance and returns `DESTINATION_ACTION_REQUIRED` (progress
+The warp route's `claimable` mapping is authoritative for private claim readiness.
+The SDK reads the current balance and returns `DESTINATION_ACTION_REQUIRED` (progress
 `next: 'complete'`) when enough funds are available. Call `bridge.complete`
 with that progress and the issuing Aleo wallet. The claim uses:
 
@@ -94,7 +94,8 @@ with that progress and the issuing Aleo wallet. The claim uses:
 | 3 | Wallet-derived `hyperlane-claim-secret`, private `scalar` |
 | 4 | Recipient freezelist exclusion proofs |
 
-The SDK rechecks delivery and available funds before wallet authorization.
+The SDK rereads `claimable` before wallet authorization; a source transaction
+receipt or Hyperlane message id is not required when the mapping shows funds.
 Accepted claims complete the transfer. Rejected claims return to destination
 authorization so the same identity can be retried. A missing or insufficient
 balance does not prove a claim succeeded. External or partial claims require
@@ -109,9 +110,68 @@ is defaulted, issued, or stored automatically for Hyperlane.
 Save every `onCheckpoint` value. Checkpoints retain the encoding with the intent
 and submitted source/destination transaction ids; they exclude scalar nonces,
 derived-input requests, and proofs. `recover({ checkpoint })` restores the
-original encoding and observes submitted claims without repeating them. Source
-approvals can resume with the same commitment. The application remains
-responsible for wallet identity backup and durable checkpoint storage.
+original encoding and checks the Aleo mapping before requesting source history.
+A checkpoint containing only the original intent and reviewed route can recover
+a funded private claim. Source clients and Circle's attestation API are not
+required for this path. Submitted destination claim ids are checked first;
+unknown or pending transactions never authorize another claim.
+
+A present zero balance retains the encoding as recovery evidence and prevents
+source resubmission. `resume` also rereads the mapping when a destination client
+is configured, so stale approval progress cannot redispatch a recognized
+encoding. A zero balance does not establish completed delivery. When the mapping
+is absent and source clients and saved transactions are available, recovery can
+still observe or resume the existing source approval flow. Source approvals
+reuse the same commitment. The application remains responsible for wallet
+identity backup and durable checkpoint storage.
 
 See [the executable example](../examples/private-hyperlane.ts). It quotes by
 default and requires `execute: true` to move funds.
+
+
+## Discover encodings by their existing counters
+
+`readHyperlaneClaimableAmount(registry, clients, { routeId, addressEncoding })`
+returns the reviewed warp route's u128 balance in destination base units, or
+`null` for an absent entry. A present `0n` entry can identify a previously used
+encoding even though it has no spendable balance. This evidence is read directly
+from Aleo, without querying Circle or a Hyperlane explorer.
+
+If the encoding or counter association was lost, the original wallet host or
+local account can re-derive candidate encodings and check them against the
+mapping:
+
+```ts
+import { scanHyperlaneAddressEncodings } from '@provablehq/aleo-bridge-sdk'
+
+const result = await scanHyperlaneAddressEncodings(registry, clients, {
+  routeId,
+  // Re-derive existing public encodings with the original recipient, network,
+  // and address_commitment_v1 scheme inside the wallet host or local account.
+  deriveAddressEncoding,
+  startCounter: 0,
+  maxCounters: 100,
+})
+
+for (const entry of result.entries) {
+  // Retain counter-to-encoding associations in the original identity store.
+  // Only positive balances can fund a claim; reread before authorization.
+  console.log(entry.counter, entry.addressEncoding, entry.claimableAmount)
+}
+// Pass result.nextCounter as startCounter for the next bounded scan, if defined.
+```
+
+The derivation callback MUST reproduce existing encodings. Do not use
+`requestAddressEncoding` to scan: each issuance reserves a fresh identity.
+Do not substitute xReserve's legacy program-scoped nonce derivation for the
+generic address-commitment scheme. Derivation keys and secret nonces remain in
+the caller's wallet host or local account; the scan handles only public encodings.
+The mapping confirms an encoding's presence but cannot reveal its secret.
+
+Scans continue across unused counters and include recognized zero balances.
+Defaults are counter zero and 100 checks per call; `maxCounters` must be between
+1 and 100,000. `nextCounter` is only a scan continuation, not a counter-allocation
+watermark. Network or derivation failures stop the scan and propagate to the
+caller instead of being treated as absent entries. Cancellation is checked
+between derivations and reads. Discovery never issues, consumes, or releases an
+identity, submits a claim, or caches mutable balances.

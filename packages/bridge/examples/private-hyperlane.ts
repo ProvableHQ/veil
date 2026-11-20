@@ -46,3 +46,23 @@ export async function runPrivateHyperlaneExample(
   if (progress.next !== 'done') throw new Error('Retain the latest checkpoint and continue through recover, wait, or complete')
   return { quote, grants }
 }
+
+
+/**
+ * Recovers a private Hyperlane claim from Aleo state without submitting a transaction.
+ * A funded claim needs only the checkpoint's original intent and reviewed route;
+ * source transaction and message ids are optional. The issuing wallet retains the secret.
+ * @param bridge Supplies the reviewed registry and destination Aleo network access.
+ * @param checkpoint Supplies the original intent, encoding, route, and any known submitted claim id.
+ * @returns Progress ready for explicit completion, waiting for funds, or observing a submitted claim.
+ * @throws Error When the checkpoint, route, or Aleo mapping read is invalid.
+ * @example const progress = await recoverPrivateHyperlaneExample(bridge, checkpoint)
+ */
+export async function recoverPrivateHyperlaneExample(bridge: BridgeClient, checkpoint: BridgeCheckpoint): Promise<BridgeProgress> {
+  if (checkpoint.intent.bridgeProtocol !== 'hyperlane' || !checkpoint.intent.hyperlane) {
+    throw new Error('Supply the original private Hyperlane intent and encoding')
+  }
+  // Do not requote or repeat a source transfer. Aleo claimable state determines
+  // readiness; the caller explicitly authorizes complete() only when appropriate.
+  return bridge.recover({ checkpoint })
+}

@@ -1,4 +1,5 @@
-import { hyperlaneRecipient } from '../protocols/hyperlane/privateMint.js'
+import { isHash, type Hash } from 'viem'
+import { hyperlaneRecipient, privateClaimStatus } from '../protocols/hyperlane/privateMint.js'
 import { planSubject, withBridgeContext } from './internal/clientContext.js'
 import * as cctp from '../protocols/cctp/evm.js'
 import { context as verulinkContext } from '../protocols/verulink/common.js'
@@ -34,7 +35,7 @@ import { assertRouteNotPaused } from './internal/routePauseGuard.js'
  * @param clients Network and wallet access for the source chain.
  * @param params Recovered transfer state, confirmation controls, and an optional callback for saving the new submission.
  * @param fetcher Optional provider HTTP implementation. Defaults to global fetch.
- * @returns The submitted transaction identifier and the updated state of the in-progress transfer.
+ * @returns The submitted transaction identifier and updated progress, or observed private Hyperlane destination state when its encoding is already recognized.
  * @throws BridgeError When no source transaction remains to be submitted, required wallet access is unavailable, or submission fails.
  * @example const execution = await resume(registry, clients, { progress })
  */
@@ -145,6 +146,22 @@ export async function resume(
     return { kind: 'evm-xreserve', ...execution }
   }
   if (route.route.protocol === 'hyperlane' && route.sourceChain.family === 'evm') {
+    if (plan.mintMode === 'private' && clients[route.destinationChain.id]) {
+      if (receipt.protocol !== 'hyperlane' || receipt.protocolState.routeId !== route.route.id) {
+        throw new BridgeError('Hyperlane resume receipt does not match the prepared route')
+      }
+      const approvals = receipt.protocolState.approvalTxIds
+      if (!Array.isArray(approvals) || approvals.some(id => typeof id !== 'string' || !isHash(id))) {
+        throw new BridgeError('Hyperlane checkpoint contains invalid approval transaction identifiers')
+      }
+      // Stale approval progress must not send funds again when the destination
+      // already recognizes the encoding, even if source history is unavailable.
+      const mapped = await privateClaimStatus(registry, clients, plan, receipt)
+      if (mapped !== receipt) {
+        await onSubmitted?.(mapped)
+        return { kind: 'evm-hyperlane', approvalTxIds: [...approvals] as Hash[], receipt: mapped }
+      }
+    }
     // Hyperlane follows the same approval-complete boundary: the saved approval
     // is observed, while the source dispatch is newly authorized once.
     const execution = await evmHyperlane.execute(

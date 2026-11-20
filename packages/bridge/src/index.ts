@@ -227,6 +227,6 @@ export type { EvmCctpTransferQuote, EvmCctpTransferExecution } from './types/cct
 
 export type { VerulinkQuote, VerulinkExecution } from './types/verulink.js'
 
-export type { HyperlaneAddressEncoding, HyperlaneOptions, HyperlaneClaimOptions } from './types/hyperlane.js'
-export { hyperlanePrivateClaimGrants } from './protocols/hyperlane/privateMint.js'
+export type { HyperlaneAddressEncoding, HyperlaneOptions, HyperlaneClaimOptions, ReadHyperlaneClaimableAmountParameters, ScanHyperlaneAddressEncodingsParameters, HyperlaneAddressEncodingEntry, HyperlaneAddressEncodingScanResult } from './types/hyperlane.js'
+export { hyperlanePrivateClaimGrants, readHyperlaneClaimableAmount, scanHyperlaneAddressEncodings } from './protocols/hyperlane/privateMint.js'
 export { hyperlaneCommitmentToLimbs } from './utils/hyperlane.js'

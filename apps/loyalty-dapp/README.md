@@ -39,3 +39,9 @@ delivery still requires the recipient claim before funds are spendable. The
 loyalty app has no bridge routes configured; add a reviewed private destination
 registry before offering this flow. See [private Hyperlane delivery](../../packages/bridge/docs/hyperlane-private-mint.md)
 and the [example](../../packages/bridge/examples/private-hyperlane.ts).
+
+Private Hyperlane recovery checks the destination warp route's `claimable` mapping.
+A funded encoding can be recovered without source transaction or message ids;
+bounded counter scans re-derive existing encodings in the wallet host or local
+account and query Aleo directly. Zero balance is distinct from an absent entry
+and does not prove completion. See the bridge guide above for discovery and retry.

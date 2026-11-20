@@ -4,12 +4,13 @@ import { quote } from '../../src/actions/quote.js'
 import { complete } from '../../src/actions/complete.js'
 import { getStatus } from '../../src/actions/getStatus.js'
 import { recover } from '../../src/actions/recover.js'
+import { resume } from '../../src/actions/resume.js'
 import { createBridgeCheckpoint } from '../../src/actions/createBridgeCheckpoint.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
-import { hyperlanePrivateClaimGrants } from '../../src/protocols/hyperlane/privateMint.js'
+import { hyperlanePrivateClaimGrants, readHyperlaneClaimableAmount, scanHyperlaneAddressEncodings } from '../../src/protocols/hyperlane/privateMint.js'
 import { hyperlaneCommitmentToLimbs } from '../../src/utils/hyperlane.js'
 import { deriveXReservePrivateMintAddressCommitment } from '../../src/utils/xreserve.js'
-import type { BridgeReceipt, PrepareParameters } from '../../src/types/protocol.js'
+import type { BridgeCheckpoint, BridgeReceipt, PrepareParameters } from '../../src/types/protocol.js'
 import type { AleoWalletClient } from '../../src/types/aleo.js'
 import { COMMITMENT_HEX, withPrivateMint } from '../fixtures/privateHyperlane.js'
 
@@ -108,10 +109,12 @@ describe('Hyperlane private delivery', () => {
     await expect(getStatus(registry, clients, fetch, { plan, receipt: pending })).rejects.toThrow(/Malformed/)
   })
 
-  it('does not query or claim funds before message delivery', async () => {
+  it('uses claimable state without requiring a message id or mailbox read', async () => {
     const { clients, request } = fixture({ delivered: false })
-    expect(await getStatus(registry, clients, fetch, { plan, receipt: pending })).toBe(pending)
+    const { messageId: _messageId, ...receipt } = pending
+    expect((await getStatus(registry, clients, fetch, { plan, receipt })).status).toBe('DESTINATION_ACTION_REQUIRED')
     expect(request).toHaveBeenCalledOnce()
+    expect(request.mock.calls[0]![0].params.mapping).toBe('claimable')
   })
 
   it('submits the five-input ABI with recipient-bound derived requests and saves only public state', async () => {
@@ -179,5 +182,190 @@ describe('Hyperlane private delivery', () => {
     expect(progress.receipt.destinationTxId).toBe('at1claim')
     expect(progress.next).toBe('done')
     expect(executeTransaction).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('Hyperlane mapping recovery and counter discovery', () => {
+  function checkpoint(): BridgeCheckpoint {
+    // Only the intent and reviewed route survive; source ids and message ids are unavailable.
+    const { source: _source, ...saved } = createBridgeCheckpoint(plan, pending)
+    return saved
+  }
+
+  it('recovers funded encodings from Aleo without a source client or Circle HTTP requests', async () => {
+    const { clients, request, executeTransaction } = fixture()
+    const fetcher = vi.fn(async () => { throw new Error('No Circle or off-chain recovery lookup is allowed') })
+    const progress = await recover(registry, clients, fetcher, { checkpoint: checkpoint() })
+    expect(progress.next).toBe('complete')
+    expect(progress.plan.hyperlane).toEqual(plan.hyperlane)
+    expect(request).toHaveBeenCalledOnce()
+    expect(fetcher).not.toHaveBeenCalled()
+    expect(executeTransaction).not.toHaveBeenCalled()
+    if (progress.next !== 'complete') throw new Error('Expected claim authorization')
+    await complete(registry, clients, { progress, skipRouteStatus: true })
+    expect(executeTransaction).toHaveBeenCalledOnce()
+  })
+
+  it.each(['SOURCE_APPROVAL_PENDING', 'SOURCE_SUBMISSION_PENDING', 'SOURCE_CONFIRMING'] as const)(
+    'uses a funded mapping before requiring source access for %s', async status => {
+      const { clients, request } = fixture()
+      const receipt = await getStatus(registry, clients, fetch, { plan, receipt: { ...pending, status } })
+      expect(receipt.status).toBe('DESTINATION_ACTION_REQUIRED')
+      expect(request).toHaveBeenCalledOnce()
+      expect(request.mock.calls[0]![0].params.mapping).toBe('claimable')
+    },
+  )
+
+  it('waits on an absent mapping without requiring an unavailable source client', async () => {
+    const { clients } = fixture({ balance: null })
+    const progress = await recover(registry, clients, fetch, { checkpoint: createBridgeCheckpoint(plan, pending) })
+    expect(progress.next).toBe('wait')
+    expect(progress.receipt.sourceTxId).toBe(pending.sourceTxId)
+  })
+
+  it('recovers a funded commitment even when source history is unavailable', async () => {
+    const { clients } = fixture()
+    const getTransactionReceipt = vi.fn(async () => { throw new Error('Source history unavailable') })
+    const progress = await recover(registry, { ...clients, ethereum: { family: 'evm', publicClient: { getTransactionReceipt } as never } }, fetch, {
+      checkpoint: createBridgeCheckpoint(plan, pending),
+    })
+    expect(progress.next).toBe('complete')
+    expect(progress.receipt.sourceTxId).toBe(pending.sourceTxId)
+    expect(getTransactionReceipt).not.toHaveBeenCalled()
+  })
+
+  it.each([null, '0u128', '99u128'])('does not infer completion or authorize claims for mapping value %s', async balance => {
+    const { clients, executeTransaction } = fixture({ balance })
+    const progress = await recover(registry, clients, fetch, { checkpoint: checkpoint() })
+    expect(progress.next).toBe('wait')
+    expect(progress.receipt.status).toBe('DELIVERY_PENDING')
+    expect(executeTransaction).not.toHaveBeenCalled()
+  })
+
+  it('keeps recognized zero-balance identities away from source resubmission', async () => {
+    const { clients } = fixture({ balance: '0u128' })
+    const saved = checkpoint()
+    saved.source = { approvalTransactionIds: [`0x${'44'.repeat(32)}`] }
+    const progress = await recover(registry, clients, fetch, { checkpoint: saved })
+    expect(progress.next).toBe('wait')
+    expect(progress.receipt.protocolState.approvalTxIds).toEqual(saved.source.approvalTransactionIds)
+  })
+
+  it.each(['100u128', '0u128'])('does not redispatch stale source progress for recognized mapping value %s', async balance => {
+    const { clients, executeTransaction } = fixture({ balance })
+    const result = await resume(registry, clients, {
+      progress: { next: 'resume', plan, receipt: { ...pending, status: 'SOURCE_SUBMISSION_PENDING',
+        protocolState: { routeId: ROUTE, approvalTxIds: [`0x${'44'.repeat(32)}`] },
+      } }, skipRouteStatus: true,
+    })
+    expect(result.receipt.status).toBe(balance === '100u128' ? 'DESTINATION_ACTION_REQUIRED' : 'DELIVERY_PENDING')
+    expect(executeTransaction).not.toHaveBeenCalled()
+  })
+
+  it('waits for a submitted claim even when claimable funds remain available', async () => {
+    const { clients, executeTransaction } = fixture({ confirmed: 'pending' })
+    const saved = checkpoint()
+    saved.destination = { transactionId: 'at1pending' }
+    const progress = await recover(registry, clients, fetch, { checkpoint: saved })
+    expect(progress.next).toBe('wait')
+    expect(progress.receipt.destinationTxId).toBe('at1pending')
+    expect(progress.receipt.status).toBe('DESTINATION_CONFIRMING')
+    expect(executeTransaction).not.toHaveBeenCalled()
+  })
+
+  it.each(['0u128', null])('rechecks the mapping after a rejected claim with balance %s', async balance => {
+    const { clients } = fixture({ confirmed: 'rejected', balance })
+    const saved = checkpoint()
+    saved.destination = { transactionId: 'at1rejected' }
+    const progress = await recover(registry, clients, fetch, { checkpoint: saved })
+    expect(progress.next).toBe('wait')
+    expect(progress.receipt.status).toBe('DELIVERY_PENDING')
+  })
+
+  it('normalizes a backend string null as an absent encoding', async () => {
+    const { clients } = fixture({ balance: 'null' })
+    expect(await readHyperlaneClaimableAmount(registry, clients, { routeId: ROUTE, addressEncoding: plan.hyperlane!.addressEncoding })).toBeNull()
+  })
+
+  it('distinguishes a recognized zero balance from an absent encoding', async () => {
+    const present = fixture({ balance: '0u128' })
+    const absent = fixture({ balance: null })
+    const params = { routeId: ROUTE, addressEncoding: plan.hyperlane!.addressEncoding }
+    expect(await readHyperlaneClaimableAmount(registry, present.clients, params)).toBe(0n)
+    expect(await readHyperlaneClaimableAmount(registry, absent.clients, params)).toBeNull()
+  })
+
+  it('scans across unused counters and recovers zero and positive entries with public data only', async () => {
+    const { clients, request } = fixture()
+    const encoding = (counter: number) => ({ commitmentHex: counter.toString(16).padStart(2, '0') + '00'.repeat(31) })
+    request.mockImplementation(async ({ params }) => {
+      if (params.key === '[1u128, 0u128]') return '0u128'
+      if (params.key === '[3u128, 0u128]') return '250u128'
+      return null
+    })
+    const derive = vi.fn(encoding)
+    const result = await scanHyperlaneAddressEncodings(registry, clients, { routeId: ROUTE, deriveAddressEncoding: derive, maxCounters: 5 })
+    expect(result).toEqual({ entries: [
+      { counter: 1, addressEncoding: encoding(1), claimableAmount: 0n },
+      { counter: 3, addressEncoding: encoding(3), claimableAmount: 250n },
+    ], nextCounter: 5 })
+    expect(derive.mock.calls.map(args => args[0])).toEqual([0, 1, 2, 3, 4])
+    expect(request.mock.calls.every(args => args[0].method === 'getMappingValue' && args[0].params.mapping === 'claimable')).toBe(true)
+    expect(Object.keys(result.entries[0]!)).toEqual(['counter', 'addressEncoding', 'claimableAmount'])
+    const continuation = await scanHyperlaneAddressEncodings(registry, clients, { routeId: ROUTE, deriveAddressEncoding: derive, startCounter: result.nextCounter, maxCounters: 2 })
+    expect(continuation.nextCounter).toBe(7)
+    expect(derive.mock.calls.slice(-2).map(args => args[0])).toEqual([5, 6])
+  })
+
+  it('returns the bytes actually queried when the derivation object changes during a read', async () => {
+    const { clients, request } = fixture()
+    const candidate = { commitmentHex: COMMITMENT_HEX }
+    request.mockImplementationOnce(async () => { candidate.commitmentHex = '22'.repeat(32); return '100u128' })
+    const result = await scanHyperlaneAddressEncodings(registry, clients, { routeId: ROUTE, deriveAddressEncoding: () => candidate, maxCounters: 1 })
+    expect(result.entries[0]!.addressEncoding.commitmentHex).toBe(COMMITMENT_HEX)
+  })
+
+  it('stops at the u32 counter boundary without wrapping or reissuing an identity', async () => {
+    const { clients } = fixture({ balance: null })
+    const derive = vi.fn(() => plan.hyperlane!.addressEncoding)
+    const result = await scanHyperlaneAddressEncodings(registry, clients, { routeId: ROUTE, deriveAddressEncoding: derive, startCounter: 0xffff_ffff, maxCounters: 2 })
+    expect(derive).toHaveBeenCalledExactlyOnceWith(0xffff_ffff)
+    expect(result).toEqual({ entries: [], nextCounter: undefined })
+  })
+
+  it.each([{ startCounter: -1 }, { startCounter: 0x1_0000_0000 }, { startCounter: 0.5 }, { maxCounters: 0 }, { maxCounters: 100_001 }])(
+    'rejects invalid scan bounds %s before deriving or reading', async bounds => {
+      const { clients, request } = fixture()
+      const derive = vi.fn(() => plan.hyperlane!.addressEncoding)
+      await expect(scanHyperlaneAddressEncodings(registry, clients, { routeId: ROUTE, deriveAddressEncoding: derive, ...bounds })).rejects.toThrow(/counter range/)
+      expect(derive).not.toHaveBeenCalled()
+      expect(request).not.toHaveBeenCalled()
+    },
+  )
+
+  it('rejects unreviewed routes before invoking the derivation callback', async () => {
+    const { clients, request } = fixture()
+    const derive = vi.fn(() => plan.hyperlane!.addressEncoding)
+    await expect(scanHyperlaneAddressEncodings(DEFAULT_BRIDGE_REGISTRY, clients, { routeId: ROUTE, deriveAddressEncoding: derive })).rejects.toThrow(/reviewed/)
+    expect(derive).not.toHaveBeenCalled()
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  it('propagates mapping failures without treating them as gaps or advancing the scan', async () => {
+    const { clients, request } = fixture()
+    request.mockRejectedValueOnce(new Error('Aleo temporarily unavailable'))
+    const derive = vi.fn(() => plan.hyperlane!.addressEncoding)
+    await expect(scanHyperlaneAddressEncodings(registry, clients, { routeId: ROUTE, deriveAddressEncoding: derive, maxCounters: 2 })).rejects.toThrow(/temporarily unavailable/)
+    expect(derive).toHaveBeenCalledOnce()
+  })
+
+  it('observes cancellation after derivation before reading or checking another counter', async () => {
+    const { clients, request } = fixture()
+    const controller = new AbortController()
+    const derive = vi.fn(() => { controller.abort(); return plan.hyperlane!.addressEncoding })
+    await expect(scanHyperlaneAddressEncodings(registry, clients, { routeId: ROUTE, deriveAddressEncoding: derive, signal: controller.signal })).rejects.toThrow(/abort/i)
+    expect(request).not.toHaveBeenCalled()
+    expect(derive).toHaveBeenCalledOnce()
   })
 })

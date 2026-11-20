@@ -61,6 +61,17 @@ export async function getStatus(
   if (params.plan.protocol === 'cctp') return cctp.getStatus(registry, clients, client, params)
   if (params.plan.protocol === 'verulink') return verulink.getStatus(registry, clients, client, params)
 
+  if (route.route.protocol === 'hyperlane' && params.plan.mintMode === 'private') {
+    const destinationState = ['DELIVERY_PENDING', 'DESTINATION_ACTION_REQUIRED', 'DESTINATION_CONFIRMING'].includes(receipt.status)
+    const sourceState = ['SOURCE_APPROVAL_PENDING', 'SOURCE_SUBMISSION_PENDING', 'SOURCE_CONFIRMING'].includes(receipt.status)
+    if (destinationState || (sourceState && clients[route.destinationChain.id])) {
+      // A recognized encoding is sufficient destination evidence. Only an
+      // absent entry falls back to source confirmation or approval recovery.
+      const next = await privateClaimStatus(registry, clients, params.plan, receipt)
+      if (destinationState || next !== receipt) return next
+    }
+  }
+
   if (receipt.status === 'SOURCE_APPROVAL_PENDING' && route.sourceChain.family === 'evm') {
     // Approval does not move bridge funds. Once confirmed, stop at an explicit
     // wallet boundary so an application can decide when to submit the deposit.
@@ -121,11 +132,6 @@ export async function getStatus(
       requireSolanaClient(registry, clients, route.sourceChain.id),
       receipt,
     )
-  }
-
-  if (route.route.protocol === 'hyperlane' && params.plan.mintMode === 'private'
-    && ['DELIVERY_PENDING', 'DESTINATION_ACTION_REQUIRED', 'DESTINATION_CONFIRMING'].includes(receipt.status)) {
-    return privateClaimStatus(registry, clients, params.plan, receipt)
   }
 
   if (receipt.status === 'DELIVERY_PENDING'

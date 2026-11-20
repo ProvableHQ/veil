@@ -1,14 +1,14 @@
-import { transactionStatus, type AlgorithmGrant, type TransactionInput } from '@provablehq/veil-core'
+import { readContract, transactionStatus, type AlgorithmGrant, type TransactionInput } from '@provablehq/veil-core'
 import { resolveTransferRoute } from '../../actions/internal/resolveTransferRoute.js'
 import { requireAleoClient, requireAleoClientWithWallet, type BridgeChainClients } from '../../connections/resolve.js'
 import { BridgeError } from '../../errors/bridgeErrors.js'
 import type { CompleteParameters } from '../../types/actions.js'
 import type { BridgePlan, BridgeReceipt, BridgeRegistry, ProtocolBridgeRoute } from '../../types/protocol.js'
-import { aleoAddressToBytes32, deriveXReservePrivateMintAddressCommitment } from '../../utils/xreserve.js'
+import { aleoAddressToBytes32, deriveXReservePrivateMintAddressCommitment as deriveAddressCommitment } from '../../utils/xreserve.js'
 import { hyperlaneCommitmentToLimbs, validateHyperlaneAddressEncoding } from '../../utils/hyperlane.js'
 import { parseDecimalAmount } from '../../utils/units.js'
 import { createBridgeCheckpoint } from '../../actions/createBridgeCheckpoint.js'
-import { readHyperlaneDelivery } from '../../utils/hyperlaneDelivery.js'
+import type { ReadHyperlaneClaimableAmountParameters, ScanHyperlaneAddressEncodingsParameters, HyperlaneAddressEncodingScanResult } from '../../types/hyperlane.js'
 
 const PROGRAM = /^[a-zA-Z][a-zA-Z0-9_]*\.aleo$/
 
@@ -67,20 +67,85 @@ function validatePrivateClaimPlan(registry: BridgeRegistry, plan: BridgePlan): v
   hyperlaneRecipient(registry, plan)
 }
 
-/** Reads the current claimable balance, retaining missing entries as zero without guessing completion. */
-async function claimableAmount(registry: BridgeRegistry, clients: BridgeChainClients, plan: BridgePlan): Promise<bigint> {
-  validatePrivateClaimPlan(registry, plan)
-  const { route, destinationChain } = resolveTransferRoute(registry, plan)
+/** Resolves a reviewed inbound claimable mapping before deriving or querying candidate encodings. */
+function claimableDestination(registry: BridgeRegistry, routeId: string) {
+  const route = registry.routes.find(entry => entry.id === routeId)
+  const source = registry.assets.find(entry => entry.id === route?.sourceAssetId)
+  const destination = registry.assets.find(entry => entry.id === route?.destinationAssetId)
+  const sourceChain = registry.chains.find(entry => entry.id === source?.chainId)
+  const destinationChain = registry.chains.find(entry => entry.id === destination?.chainId)
+  if (!route || route.protocol !== 'hyperlane' || !sourceChain || !['evm', 'solana'].includes(sourceChain.family)
+    || destinationChain?.family !== 'aleo') throw new BridgeError('Claimable lookup requires an inbound Hyperlane route to Aleo')
   const metadata = privateMintMetadata(route)
-  const [lo, hi] = hyperlaneCommitmentToLimbs(plan.hyperlane!.addressEncoding)
-  const value = await requireAleoClient(registry, clients, destinationChain.id).publicClient.request({
-    method: 'getMappingValue', params: { programId: metadata.program, mapping: metadata.mapping, key: `[${lo}u128, ${hi}u128]` },
+  return { ...metadata, chainId: destinationChain.id }
+}
+
+/**
+ * Reads an address encoding's current claimable balance from its Aleo warp route.
+ * Mapping presence is recovery evidence even when the balance is zero. Reads
+ * only Aleo state; no source-chain receipt, message id, Circle API, or signature is required.
+ * @param registry Supplies the reviewed inbound deployment, including its claimable mapping.
+ * @param clients Supplies Aleo network access for the route's destination.
+ * @param params Selects the route and canonical public encoding to inspect.
+ * @returns The unsigned u128 balance in destination base units, or null for an absent encoding. Neither null nor zero proves completion.
+ * @throws BridgeError When the deployment, encoding, network access, or mapping value is invalid.
+ * @example const amount = await readHyperlaneClaimableAmount(registry, clients, { routeId, addressEncoding })
+ */
+export async function readHyperlaneClaimableAmount(
+  registry: BridgeRegistry,
+  clients: BridgeChainClients,
+  params: ReadHyperlaneClaimableAmountParameters,
+): Promise<bigint | null> {
+  const metadata = claimableDestination(registry, params.routeId)
+  const [lo, hi] = hyperlaneCommitmentToLimbs(params.addressEncoding)
+  const value = await readContract(requireAleoClient(registry, clients, metadata.chainId).publicClient, {
+    programId: metadata.program, mapping: metadata.mapping, key: `[${lo}u128, ${hi}u128]`,
   })
-  if (value === null) return 0n
+  if (value === null) return null
   if (typeof value !== 'string' || !/^\d{1,39}u128$/.test(value.trim()) || BigInt(value.trim().slice(0, -4)) >= 1n << 128n) {
     throw new BridgeError('Malformed Hyperlane claimable amount')
   }
   return BigInt(value.trim().slice(0, -4))
+}
+
+/**
+ * Finds existing address encodings by checking derived counters against Aleo claimable state.
+ * The caller retains custody of derivation keys. Queries every candidate in the
+ * bounded range, including past gaps and zero balances, without issuing identities or submitting claims.
+ * @param registry Supplies the reviewed Hyperlane destination and mapping.
+ * @param clients Supplies destination Aleo network access; no source-chain client or Circle HTTP access is needed.
+ * @param params Supplies the original derivation callback, counter range, and optional cancellation.
+ * @returns Public entries and the next unchecked counter; secret nonces and keys are never returned or persisted.
+ * @throws BridgeError When bounds, route, encodings, or mapping values are invalid. Propagates derivation, cancellation, and network failures without treating them as absent entries.
+ * @example const result = await scanHyperlaneAddressEncodings(registry, clients, { routeId, deriveAddressEncoding, maxCounters: 100 })
+ */
+export async function scanHyperlaneAddressEncodings(
+  registry: BridgeRegistry,
+  clients: BridgeChainClients,
+  params: ScanHyperlaneAddressEncodingsParameters,
+): Promise<HyperlaneAddressEncodingScanResult> {
+  const start = params.startCounter ?? 0
+  const limit = params.maxCounters ?? 100
+  if (!Number.isSafeInteger(start) || start < 0 || start > 0xffff_ffff
+    || !Number.isSafeInteger(limit) || limit < 1 || limit > 100_000
+    || typeof params.deriveAddressEncoding !== 'function') throw new BridgeError('Invalid Hyperlane encoding scan counter range or derivation callback')
+  // Validate the route before invoking the caller's derivation capability.
+  const destination = claimableDestination(registry, params.routeId)
+  requireAleoClient(registry, clients, destination.chainId)
+  const entries: HyperlaneAddressEncodingScanResult['entries'] = []
+  const end = Math.min(start + limit, 0x1_0000_0000)
+  for (let counter = start; counter < end; counter++) {
+    params.signal?.throwIfAborted()
+    const candidate = await params.deriveAddressEncoding(counter)
+    params.signal?.throwIfAborted()
+    validateHyperlaneAddressEncoding(candidate)
+    // Keep the queried bytes stable if the caller reuses a mutable response object.
+    const addressEncoding = { commitmentHex: candidate.commitmentHex }
+    const claimableAmount = await readHyperlaneClaimableAmount(registry, clients, { routeId: params.routeId, addressEncoding })
+    params.signal?.throwIfAborted()
+    if (claimableAmount !== null) entries.push({ counter, addressEncoding: { commitmentHex: addressEncoding.commitmentHex }, claimableAmount })
+  }
+  return { entries, nextCounter: end > 0xffff_ffff ? undefined : end }
 }
 
 /**
@@ -102,7 +167,7 @@ export function hyperlanePrivateClaimGrants(options: { registry: BridgeRegistry;
 
 /**
  * Checks destination claim confirmation or exposes a fresh wallet authorization boundary.
- * Reads Aleo delivery, balance, or transaction state without requesting a signature.
+ * Reads Aleo claimable balance or transaction state without requesting a signature.
  * @param registry Supplies the reviewed private claim deployment.
  * @param clients Supplies Aleo network access for the plan's destination.
  * @param plan Supplies the original recipient commitment and planned claim amount.
@@ -113,28 +178,28 @@ export function hyperlanePrivateClaimGrants(options: { registry: BridgeRegistry;
  */
 export async function privateClaimStatus(registry: BridgeRegistry, clients: BridgeChainClients, plan: BridgePlan, receipt: BridgeReceipt): Promise<BridgeReceipt> {
   validatePrivateClaimPlan(registry, plan)
-  const { route, destinationChain, destinationAsset } = resolveTransferRoute(registry, plan)
+  const { destinationChain, destinationAsset } = resolveTransferRoute(registry, plan)
   const client = requireAleoClient(registry, clients, destinationChain.id)
   const { nextAction: _nextAction, ...rest } = receipt
   if (receipt.status === 'DESTINATION_CONFIRMING') {
     if (!receipt.destinationTxId) throw new BridgeError('Hyperlane claim receipt is missing its destination transaction id')
     const result = await transactionStatus(client.publicClient, { transactionId: receipt.destinationTxId })
     if (result.status === 'accepted') return { ...rest, status: 'COMPLETED' }
-    // A rejected claim leaves source funds available; retry with the same identity.
+    // Pending or unknown submissions must resolve before another claim is authorized.
     if (result.status !== 'rejected') return receipt
-    return { ...rest, status: 'DESTINATION_ACTION_REQUIRED' }
   }
-  if (!receipt.messageId) return receipt
-  if (!await readHyperlaneDelivery(client, { mailbox: privateMintMetadata(route).mailbox, messageId: receipt.messageId })) return receipt
+  // The destination balance is authoritative even when source history or a message id is unavailable.
   const amount = parseDecimalAmount(plan.amountIn, destinationAsset.decimals)
-  if (await claimableAmount(registry, clients, plan) < amount) {
+  const claimable = await readHyperlaneClaimableAmount(registry, clients, { routeId: plan.route.id, addressEncoding: plan.hyperlane!.addressEncoding })
+  if (claimable === null && ['SOURCE_APPROVAL_PENDING', 'SOURCE_SUBMISSION_PENDING', 'SOURCE_CONFIRMING'].includes(receipt.status)) return receipt
+  if (claimable === null || claimable < amount) {
     return receipt.status === 'DELIVERY_PENDING' ? receipt : { ...rest, status: 'DELIVERY_PENDING' }
   }
   return { ...rest, status: 'DESTINATION_ACTION_REQUIRED' }
 }
 
 /**
- * Submits the reviewed five-input private claim after rechecking delivery and available funds.
+ * Submits the reviewed five-input private claim after rechecking available funds.
  * Requests wallet authorization, proves, and broadcasts an Aleo transaction that spends destination gas.
  * @param registry Supplies the reviewed claim program and recipient freezelist.
  * @param clients Supplies destination network access and the issuing wallet or local signer.
@@ -153,7 +218,7 @@ export async function completePrivateClaim(
   if (receipt.protocol !== 'hyperlane' || receipt.protocolState.routeId !== route.id
     || receipt.status !== 'DESTINATION_ACTION_REQUIRED' || receipt.nextAction !== undefined) throw new BridgeError('Hyperlane receipt has no private claim ready')
   const fresh = await privateClaimStatus(registry, clients, plan, { ...receipt, status: 'DELIVERY_PENDING' })
-  if (fresh.status !== 'DESTINATION_ACTION_REQUIRED') throw new BridgeError('Hyperlane private claim is not funded or delivered')
+  if (fresh.status !== 'DESTINATION_ACTION_REQUIRED') throw new BridgeError('Hyperlane private claim is not funded')
   const { program, freezelistProgram } = privateMintMetadata(route)
   const wallet = requireAleoClientWithWallet(registry, clients, destinationChain.id, 'claim private Hyperlane funds').walletClient
   const commitmentHex = plan.hyperlane!.addressEncoding.commitmentHex
@@ -163,7 +228,7 @@ export async function completePrivateClaim(
     throw new BridgeError('Local Hyperlane claims require a secretNonce and recipient proof literal')
   }
   if (secret !== undefined && (!/^\d+scalar$/.test(secret)
-    || await deriveXReservePrivateMintAddressCommitment(plan.recipient, secret, route.environment) !== commitmentHex)) {
+    || await deriveAddressCommitment(plan.recipient, secret, route.environment) !== commitmentHex)) {
     throw new BridgeError('Hyperlane claim secret does not match the recipient commitment')
   }
   if (proof !== undefined && (typeof proof !== 'string' || !proof.trim())) throw new BridgeError('Supply a recipient proof literal or omit it for wallet derivation')

@@ -1,4 +1,4 @@
-import { hyperlaneRecipient } from '../protocols/hyperlane/privateMint.js'
+import { hyperlaneRecipient, privateClaimStatus, readHyperlaneClaimableAmount } from '../protocols/hyperlane/privateMint.js'
 import { isTransferId, planSubject, withBridgeContext } from './internal/clientContext.js'
 import { isRegistryVersionCompatible } from '../registry/compatibility.js'
 import * as cctp from '../protocols/cctp/evm.js'
@@ -6,7 +6,7 @@ import * as verulink from '../protocols/verulink/lifecycle.js'
 import { BridgeError } from '../errors/bridgeErrors.js'
 import { requireEvmClient, type BridgeChainClients } from '../connections/resolve.js'
 import type { RecoverParameters } from '../types/actions.js'
-import type { BridgeProgress, BridgeReceipt, BridgeRegistry } from '../types/protocol.js'
+import type { BridgePlan, BridgeProgress, BridgeReceipt, BridgeRegistry } from '../types/protocol.js'
 import type { XReserveHttpTransport } from '../types/xreserve.js'
 import { recoverSourceCheckpoint } from '../protocols/xreserve/evmToAleo.js'
 import { recoverSourceCheckpoint as recoverEvmHyperlaneSource } from '../protocols/hyperlane/evm.js'
@@ -15,6 +15,7 @@ import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 import { prepare } from './prepare.js'
 import { toBridgeProgress } from './internal/toBridgeProgress.js'
 import { resolveCircleOptions } from './internal/circleOptions.js'
+import { parseDecimalAmount } from '../utils/units.js'
 
 /**
  * Reconstructs an interrupted cross-chain transfer from a saved checkpoint.
@@ -23,7 +24,9 @@ import { resolveCircleOptions } from './internal/circleOptions.js'
  * completed, and whether the transfer is still moving, finished, failed, or
  * waiting for another wallet authorization.
  *
- * Recovery reads existing network and provider state. It never repeats a
+ * Private Hyperlane recovery reads the Aleo claimable mapping even when source
+ * transaction identifiers are unavailable. Other protocols read their existing
+ * network and provider state. Recovery never repeats a
  * transaction or moves funds.
  *
  * @param registry Supported chains, assets, and bridge provider deployments.
@@ -66,6 +69,13 @@ export async function recover(
   }
   if (approvalReplacement) throw new BridgeError('CCTP recovery options require a CCTP route')
   if (plan.protocol === 'verulink') return toBridgeProgress(plan, await verulink.recover(registry, clients, client, { checkpoint, plan, signal: params.signal }))
+  // Private Hyperlane deposits can be recovered from their destination mapping
+  // even if source history, a message id, or the source checkpoint was lost.
+  if (plan.protocol === 'hyperlane' && plan.mintMode === 'private'
+    && (clients[route.destinationChain.id] || !checkpoint.source || checkpoint.destination)) {
+    const mapped = await recoverPrivateClaimFromMapping(registry, clients, params, plan)
+    if (mapped) return toBridgeProgress(plan, mapped)
+  }
   let receipt: BridgeReceipt
   if (route.sourceChain.family === 'aleo') {
     // Aleo can checkpoint after proving but before broadcast. This state needs
@@ -239,21 +249,53 @@ export async function recover(
 /** Restores an already submitted private claim without requesting another signature. */
 async function recoveredPrivateClaim(
   registry: BridgeRegistry, clients: BridgeChainClients, client: XReserveHttpTransport,
-  params: RecoverParameters, plan: import('../types/protocol.js').BridgePlan, receipt: BridgeReceipt,
+  params: RecoverParameters, plan: BridgePlan, receipt: BridgeReceipt,
 ): Promise<BridgeReceipt> {
   if (plan.protocol !== 'hyperlane' || plan.mintMode !== 'private') return receipt
-  const destination = params.checkpoint.destination
-  if (destination?.preparedTransaction || (destination && !destination.transactionId)) {
+  if (receipt.status !== 'DELIVERY_PENDING') return receipt
+  return getStatus(registry, clients, client, { plan, receipt, signal: params.signal })
+}
+
+/** Recovers funded encodings or observes submitted claims using only Aleo state. */
+async function recoverPrivateClaimFromMapping(
+  registry: BridgeRegistry,
+  clients: BridgeChainClients,
+  params: RecoverParameters,
+  plan: BridgePlan,
+): Promise<BridgeReceipt | undefined> {
+  const checkpoint = params.checkpoint
+  hyperlaneRecipient(registry, plan)
+  const destination = checkpoint.destination
+  if (destination?.preparedTransaction || (destination && (typeof destination.transactionId !== 'string' || !destination.transactionId))) {
     throw new BridgeError('Hyperlane private recovery requires a submitted destination transaction id')
   }
-  if (receipt.status !== 'DELIVERY_PENDING') {
-    if (destination) throw new BridgeError('Cannot verify the source of the saved Hyperlane private claim yet; retain the checkpoint and retry')
-    return receipt
+  const approvals = checkpoint.source?.approvalTransactionIds
+  if (approvals !== undefined && (!Array.isArray(approvals) || approvals.some(id => typeof id !== 'string'))) {
+    throw new BridgeError('Hyperlane checkpoint contains invalid approval transaction identifiers')
   }
-  return getStatus(registry, clients, client, {
-    plan, receipt: destination?.transactionId
-      ? { ...receipt, status: 'DESTINATION_CONFIRMING', destinationTxId: destination.transactionId }
-      : receipt,
-    signal: params.signal,
+  const receipt: BridgeReceipt = {
+    id: destination?.transactionId ?? checkpoint.source?.transactionId ?? plan.hyperlane!.addressEncoding.commitmentHex,
+    protocol: 'hyperlane', status: 'DELIVERY_PENDING',
+    ...(checkpoint.source?.transactionId ? { sourceTxId: checkpoint.source.transactionId } : {}),
+    protocolState: { routeId: plan.route.id, ...(approvals ? { approvalTxIds: [...approvals] } : {}) },
+  }
+  params.signal?.throwIfAborted()
+  if (destination?.transactionId) {
+    // Observe an existing claim before looking for spendable funds, so an
+    // unresolved transaction can never trigger a duplicate claim or dispatch.
+    return privateClaimStatus(registry, clients, plan, { ...receipt, status: 'DESTINATION_CONFIRMING', destinationTxId: destination.transactionId })
+  }
+  const claimable = await readHyperlaneClaimableAmount(registry, clients, {
+    routeId: plan.route.id, addressEncoding: plan.hyperlane!.addressEncoding,
   })
+  params.signal?.throwIfAborted()
+  // An absent entry can still mean an unsubmitted source approval. Preserve
+  // existing source recovery in that case. A present zero entry proves only
+  // prior recognition of this encoding, never completion or permission to resend.
+  if (claimable === null && checkpoint.source && clients[plan.sourceAsset.chainId]) return undefined
+  const destinationAsset = resolveTransferRoute(registry, plan).destinationAsset
+  const amount = parseDecimalAmount(plan.amountIn, destinationAsset.decimals)
+  return claimable !== null && claimable >= amount
+    ? { ...receipt, status: 'DESTINATION_ACTION_REQUIRED' }
+    : receipt
 }
