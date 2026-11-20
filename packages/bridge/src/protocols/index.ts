@@ -1,3 +1,5 @@
+import { quoteAleoHyperlanePrivateTransfer } from './hyperlane/privateTransferFees.js'
+import type { QuoteAleoHyperlanePrivateTransferParameters } from '../types/hyperlanePrivateTransfer.js'
 import type { Client } from '@provablehq/veil-core'
 import type { EvmClient, EvmWalletClient } from '../connections/evm.js'
 import type { SolanaClient, SolanaWalletClient } from '../connections/solana.js'
@@ -57,6 +59,20 @@ function splitRegistry<Params extends object>(
  */
 export const hyperlane = {
   aleo: {
+    /**
+     * Quotes token deductions and both hook payments for a private outbound transfer.
+     * Reads the reviewed warp's fee mapping and hook state without signing or
+     * enabling private execution. Aleo execution fees remain unknown.
+     * @param client Supplies Aleo network access for the source deployment.
+     * @param params Supplies the gross transfer plan and optional reviewed registry; the default catalog does not enable private outbound ABI metadata.
+     * @returns Gross token funding, net destination tokens, included token fee, and private dispatch credits requirements.
+     * @throws BridgeError When private deployment metadata or live fee/hook state cannot safely price the transfer.
+     * @example const quote = await hyperlane.aleo.quotePrivateTransfer(client, { registry, plan })
+     */
+    quotePrivateTransfer(client: Client, params: QuoteAleoHyperlanePrivateTransferParameters & ProtocolHelperRegistry) {
+      const [registry, actionParams] = splitRegistry<QuoteAleoHyperlanePrivateTransferParameters>(params)
+      return quoteAleoHyperlanePrivateTransfer(registry, client, actionParams)
+    },
     /**
      * Calculates the Hyperlane relayer payment for a transfer leaving Aleo.
      *

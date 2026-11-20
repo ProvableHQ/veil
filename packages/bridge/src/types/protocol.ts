@@ -1,3 +1,5 @@
+import type { HyperlaneOptions } from './hyperlane.js'
+
 /** Identifies the protocol that carries a bridge transfer. */
 export type BridgeProtocol = 'xreserve' | 'hyperlane' | 'cctp' | 'verulink'
 
@@ -255,7 +257,7 @@ export type BridgeFee = {
   estimated: boolean
 }
 
-/** Selects the Aleo destination transition used for an xReserve mint. */
+/** Selects public, record, or private Aleo delivery; Hyperlane supports public and private. */
 export type AleoMintMode = 'public' | 'record' | 'private'
 
 /**
@@ -286,6 +288,7 @@ export type CctpOptions = {
 /**
  * Parameters for preparing a protocol bridge transfer.
  *
+ * @property hyperlane Optional wallet-issued address encoding for private inbound Hyperlane delivery. Omit for public delivery.
  * @property cctp Optional CCTP finality, forwarding, and fee ceiling; only valid for CCTP routes.
  * @property source Chain and asset debited by the transfer.
  * @property destination Chain and asset delivered by the transfer.
@@ -293,10 +296,11 @@ export type CctpOptions = {
  * @property amount Decimal source amount in display units.
  * @property recipient Destination-chain recipient.
  * @property sender Optional source-chain sender used by future fee and approval planning.
- * @property mintMode Aleo mint transition selected for xReserve delivery. Defaults to `public`.
+ * @property mintMode Aleo mint transition selected for xReserve or Hyperlane delivery. Defaults to `private` when `hyperlane.addressEncoding` is supplied, otherwise `public`.
  * @property privateRecipient Deprecated alias for `mintMode: 'private'`. Defaults to false.
  */
 export type PrepareParameters = {
+  hyperlane?: HyperlaneOptions | undefined
   cctp?: CctpOptions | undefined
   source: BridgeEndpoint
   destination: BridgeEndpoint
@@ -315,6 +319,7 @@ export type PrepareParameters = {
  * This information can be quoted before any wallet authorization is requested
  * or funds move.
  *
+ * @property hyperlane Optional wallet-issued address encoding for private inbound Hyperlane delivery. Omit for public delivery.
  * @property cctp Resolved CCTP options, retained for execution and recovery.
  * @property registryVersion Registry snapshot used to build the plan.
  * @property protocol Protocol responsible for delivery.
@@ -335,6 +340,7 @@ export type PrepareParameters = {
  * @property transferId Optional random 16-hex-character identifier minted by `quote` and restored by `recover`. Sent in the `X-Aleo-Bridge` header of Aleo reads so a Provable gateway can group one transfer's requests. Derived from no key, address, or amount. Absent from plans built by `prepare` alone.
  */
 export type BridgePlan = {
+  hyperlane?: HyperlaneOptions | undefined
   cctp?: CctpOptions | undefined
   circle?: {
     privateMintAddressCommitment?: string | undefined
@@ -362,6 +368,7 @@ export type BridgePlan = {
  * Private keys, records, proofs, and private-mint nonces are deliberately
  * excluded so this value can be stored with transaction identifiers.
  *
+ * @property hyperlane Optional wallet-issued address encoding for private inbound Hyperlane delivery. Omit for public delivery.
  * @property cctp Optional CCTP finality, forwarding, and fee ceiling; only valid for CCTP routes.
  * @property source Chain and asset debited by the transfer.
  * @property destination Chain and asset delivered by the transfer.
@@ -372,6 +379,7 @@ export type BridgePlan = {
  * @property mintMode Aleo destination transition selected by the caller.
  */
 export type BridgeIntent = {
+  hyperlane?: HyperlaneOptions | undefined
   cctp?: CctpOptions | undefined
   source: BridgeEndpoint
   destination: BridgeEndpoint

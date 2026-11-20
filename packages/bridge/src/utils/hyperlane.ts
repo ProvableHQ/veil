@@ -1,6 +1,37 @@
 import bs58 from 'bs58'
 import { getAddress, hexToBytes, isAddress, padHex } from 'viem'
 import { BridgeError } from '../errors/bridgeErrors.js'
+import type { HyperlaneAddressEncoding } from '../types/hyperlane.js'
+
+/**
+ * Validates canonical wallet-issued commitment bytes without accepting scalars or private state.
+ * Checks the supplied object without contacting a wallet or network.
+ * @param value Supplies an untrusted wallet response or saved address encoding.
+ * @returns Nothing; narrows valid input to its public commitment object.
+ * @throws BridgeError When extra fields or a noncanonical 32-byte hexadecimal commitment are present.
+ * @example validateHyperlaneAddressEncoding({ commitmentHex: '11'.repeat(32) })
+ */
+export function validateHyperlaneAddressEncoding(value: unknown): asserts value is HyperlaneAddressEncoding {
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+    || Object.keys(value).length !== 1 || !('commitmentHex' in value)
+    || typeof value.commitmentHex !== 'string' || !/^[0-9a-f]{64}$/.test(value.commitmentHex)) {
+    throw new BridgeError('Hyperlane address encoding requires a canonical lowercase 32-byte commitmentHex without 0x')
+  }
+}
+
+/**
+ * Converts a wallet-issued commitment to the low and high Aleo u128 limbs.
+ * Interprets each 16-byte half as little-endian without reversing wire bytes or contacting a network.
+ * @param encoding Supplies canonical lowercase commitment hex without `0x`.
+ * @returns Low limb followed by high limb, both unsigned 128-bit integers.
+ * @throws BridgeError When the commitment is not exactly 32 canonical bytes.
+ * @example const limbs = hyperlaneCommitmentToLimbs({ commitmentHex: '11'.repeat(32) })
+ */
+export function hyperlaneCommitmentToLimbs(encoding: HyperlaneAddressEncoding): readonly [bigint, bigint] {
+  validateHyperlaneAddressEncoding(encoding)
+  const bytes = hexToBytes(`0x${encoding.commitmentHex}`)
+  return [littleEndianU128(bytes.slice(0, 16)), littleEndianU128(bytes.slice(16, 32))]
+}
 
 function littleEndianU128(bytes: Uint8Array): bigint {
   let value = 0n

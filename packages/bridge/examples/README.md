@@ -684,3 +684,20 @@ an interruption. Do not delete submission-attempt markers to force a retry.
 A stale lock requires checking that the original process has stopped first.
 The second leg uses the first leg's verified net amount, and completes only
 after an accepted public ALEO transfer to the original account.
+
+## Private Hyperlane delivery
+
+[`private-hyperlane.ts`](./private-hyperlane.ts) accepts an injected bridge client
+with a reviewed private-claim route and a wallet-issued address encoding. It
+quotes by default; explicit execution follows message delivery, submits the
+private claim, and verifies acceptance. See [deployment requirements and wallet grants](../docs/hyperlane-private-mint.md).
+
+The same example exposes `recoverPrivateHyperlaneExample` for read-only recovery
+from the Aleo `claimable` mapping, including when source transaction/message ids
+are unavailable. The guide also demonstrates bounded discovery of existing
+address encodings by counter without Circle API requests.
+
+`quotePrivateHyperlaneOutboundExample` reads a reviewed private outbound fee
+mapping, reports gross token funding and net destination tokens, and sums both
+private dispatch hook payments. It is read-only; it does not submit the private
+transition or replace the public outbound execution examples.

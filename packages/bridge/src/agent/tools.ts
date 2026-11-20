@@ -98,6 +98,7 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
             amount: { type: 'string', description: 'Positive decimal amount in source-asset display units.' },
             recipient: { type: 'string' },
             sender: { type: 'string' },
+            hyperlane: { type: 'object', properties: { addressEncoding: { type: 'object', properties: { commitmentHex: { type: 'string', pattern: '^[0-9a-f]{64}$' } }, required: ['commitmentHex'], additionalProperties: false } }, required: ['addressEncoding'], additionalProperties: false },
             mintMode: { type: 'string', enum: ['public', 'record', 'private'] },
           },
           required: ['source', 'destination', 'amount', 'recipient'],

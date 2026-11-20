@@ -1,3 +1,4 @@
+import { withPrivateMint, COMMITMENT_HEX } from '../fixtures/privateHyperlane.js'
 import { getCompiledTransactionMessageDecoder, getTransactionDecoder } from '@solana/kit'
 import { describe, expect, it, vi } from 'vitest'
 import { execute as executeSolanaHyperlaneTransfer } from '../../src/protocols/hyperlane/solana.js'
@@ -402,4 +403,23 @@ describe('executeSolanaHyperlaneTransfer', () => {
     expect(execution.receipt.status).toBe('SOURCE_CONFIRMING')
     expect(execution.receipt.sourceTxId).toBe(STUB_SIGNATURE)
   })
+})
+
+
+it('encodes private commitment bytes in the signed Solana recipient slot', async () => {
+  const registry = withPrivateMint(registryWithRoute(), 'hyperlane:solana/sol->aleo/sol')
+  const publicPlan = transferPlan(registry)
+  const plan = prepare(registry, {
+    source: { chain: 'solana', asset: 'sol' }, destination: { chain: 'aleo', asset: 'sol' },
+    amount: publicPlan.amountIn, recipient: publicPlan.recipient, sender: publicPlan.sender,
+    hyperlane: { addressEncoding: { commitmentHex: COMMITMENT_HEX } },
+  })
+  let wire: Uint8Array | undefined
+  const wallet = stubExecutor({ onSend: value => { wire = value } })
+  await executeSolanaHyperlaneTransfer(registry, client(wallet, executeRpc()), { plan })
+  const transaction = getTransactionDecoder().decode(wire!)
+  const message = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes)
+  const instruction = message.instructions.find(item => message.staticAccounts[item.programAddressIndex] === WARP_PROGRAM_ADDRESS)!
+  expect(Buffer.from(instruction.data!.slice(13, 45)).toString('hex')).toBe(COMMITMENT_HEX)
+  expect(instruction.data).toHaveLength(77)
 })

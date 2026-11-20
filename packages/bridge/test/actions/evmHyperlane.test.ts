@@ -1,3 +1,5 @@
+import { execute } from '../../src/actions/execute.js'
+import { withPrivateMint, COMMITMENT_HEX } from '../fixtures/privateHyperlane.js'
 import {
   decodeFunctionData,
   encodeAbiParameters,
@@ -486,4 +488,70 @@ describe('Ethereum Hyperlane actions', () => {
       recipientBytes32: RECIPIENT,
     })).rejects.toThrow(/expected 1/)
   })
+})
+
+
+describe('private EVM Hyperlane wire and recovery', () => {
+  it('reuses the commitment verbatim through quote, dispatch, checkpoint, and recovery', async () => {
+    const registry = withPrivateMint(DEFAULT_BRIDGE_REGISTRY, 'hyperlane:ethereum/eth->aleo/eth')
+    const { bridgeExecutor, sent } = executor({ amount: 100n, nativeValue: 101n })
+    const quoted = await quote(registry, { ethereum: bridgeExecutor }, {
+      source: { chain: 'ethereum', asset: 'eth' }, destination: { chain: 'aleo', asset: 'eth' },
+      amount: '0.0000000000000001', recipient: ALEO_RECIPIENT,
+      hyperlane: { addressEncoding: { commitmentHex: COMMITMENT_HEX } },
+    })
+    expect(quoted.kind).toBe('evm-hyperlane')
+    if (quoted.kind !== 'evm-hyperlane') throw new Error('Expected EVM Hyperlane')
+    expect(quoted.recipientBytes32).toBe(`0x${COMMITMENT_HEX}`)
+    expect(quoted.plan.steps).toContainEqual(expect.objectContaining({ key: 'destination-claim', executor: 'aleo-wallet' }))
+    const execution = await execute(registry, { ethereum: bridgeExecutor }, { plan: quoted.plan, skipRouteStatus: true })
+    const decoded = decodeFunctionData({ abi: ABI, data: sent[0]!.data })
+    expect(decoded.args).toEqual([1634493807, `0x${COMMITMENT_HEX}`, 100n])
+    const checkpoint = createBridgeCheckpoint(quoted.plan, execution.receipt)
+    expect(checkpoint.intent.hyperlane).toEqual(quoted.plan.hyperlane)
+    const progress = await recover(registry, { ethereum: bridgeExecutor,
+      aleo: { family: 'aleo', publicClient: { request: async () => null } as never },
+    }, fetch, { checkpoint })
+    expect(progress.plan.hyperlane).toEqual(quoted.plan.hyperlane)
+    expect(progress.receipt.protocolState.recipientBytes32).toBe(`0x${COMMITMENT_HEX}`)
+    expect(sent).toHaveLength(1)
+  })
+
+  it('rejects a private low-level recipient override before any RPC or signature', async () => {
+    const registry = withPrivateMint(DEFAULT_BRIDGE_REGISTRY, 'hyperlane:ethereum/eth->aleo/eth')
+    const privatePlan = prepare(registry, {
+      source: { chain: 'ethereum', asset: 'eth' }, destination: { chain: 'aleo', asset: 'eth' },
+      amount: '1', recipient: ALEO_RECIPIENT,
+      hyperlane: { addressEncoding: { commitmentHex: COMMITMENT_HEX } },
+    })
+    const { bridgeExecutor, sent } = executor({ amount: 1n, nativeValue: 2n })
+    const chain = vi.spyOn(bridgeExecutor.publicClient, 'getChainId')
+    await expect(executeEvmHyperlaneTransfer(registry, bridgeExecutor, { plan: privatePlan, recipientBytes32: RECIPIENT })).rejects.toThrow(/do not match/)
+    expect(sent).toHaveLength(0)
+    expect(chain).not.toHaveBeenCalled()
+  })
+})
+
+
+it('resumes a private token approval with the same commitment and no duplicate approval', async () => {
+  const registry = withPrivateMint(DEFAULT_BRIDGE_REGISTRY, 'hyperlane:ethereum/wbtc->aleo/wbtc')
+  const options: Parameters<typeof executor>[0] = { token: WBTC, amount: 100_000n, nativeValue: 50_000n, receipt: 'pending' }
+  const { bridgeExecutor, sent } = executor(options)
+  const privatePlan = prepare(registry, {
+    source: { chain: 'ethereum', asset: 'wbtc' }, destination: { chain: 'aleo', asset: 'wbtc' },
+    amount: '0.001', recipient: ALEO_RECIPIENT,
+    hyperlane: { addressEncoding: { commitmentHex: COMMITMENT_HEX } },
+  })
+  const execution = await execute(registry, { ethereum: bridgeExecutor }, { plan: privatePlan, skipRouteStatus: true, confirmationTimeoutMs: 0 })
+  expect(execution.receipt.status).toBe('SOURCE_APPROVAL_PENDING')
+  options.receipt = 'confirmed'
+  options.allowance = 100_000n
+  const progress = await recover(registry, { ethereum: bridgeExecutor }, fetch, { checkpoint: createBridgeCheckpoint(privatePlan, execution.receipt) })
+  expect(progress.next).toBe('resume')
+  if (progress.next !== 'resume') throw new Error('Expected resume')
+  await resume(registry, { ethereum: bridgeExecutor }, { progress, skipRouteStatus: true })
+  expect(sent).toHaveLength(2)
+  const dispatch = decodeFunctionData({ abi: ABI, data: sent[1]!.data })
+  expect(dispatch.functionName).toBe('transferRemote')
+  expect(dispatch.args?.[1]).toBe(`0x${COMMITMENT_HEX}`)
 })

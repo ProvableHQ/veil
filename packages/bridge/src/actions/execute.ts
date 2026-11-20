@@ -1,3 +1,4 @@
+import { hyperlaneRecipient } from '../protocols/hyperlane/privateMint.js'
 import { planSubject, withBridgeContext } from './internal/clientContext.js'
 import * as cctp from '../protocols/cctp/evm.js'
 import { execute as executeVerulink } from '../protocols/verulink/source.js'
@@ -12,7 +13,6 @@ import {
 import type { XReserveBurnMode } from '../types/aleo.js'
 import type { BridgeReceipt, BridgeRegistry } from '../types/protocol.js'
 import type { ExecuteParameters, BridgeExecution } from '../types/actions.js'
-import { aleoAddressToBytes32 } from '../utils/xreserve.js'
 import * as aleoHyperlane from '../protocols/hyperlane/aleo.js'
 import * as evmHyperlane from '../protocols/hyperlane/evm.js'
 import * as solanaHyperlane from '../protocols/hyperlane/solana.js'
@@ -130,7 +130,7 @@ export async function execute(
       requireEvmClientWithWallet(registry, clients, chainId, 'execute Hyperlane transfer'),
       {
         plan: params.plan,
-        recipientBytes32: aleoAddressToBytes32(params.plan.recipient),
+        recipientBytes32: hyperlaneRecipient(registry, params.plan),
         pollingIntervalMs: params.pollingIntervalMs,
         confirmationTimeoutMs: params.confirmationTimeoutMs,
         onSubmitted,

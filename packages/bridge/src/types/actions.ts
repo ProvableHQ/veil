@@ -1,3 +1,4 @@
+import type { HyperlaneClaimOptions } from './hyperlane.js'
 import type { EvmCctpTransferQuote, EvmCctpTransferExecution } from './cctp.js'
 import type { ProvingProgressHandler, TransactionInput } from '@provablehq/veil-core'
 import type { ComplianceProofs } from './compliance.js'
@@ -253,8 +254,9 @@ export type GetStatusParameters = {
 }
 
 /**
- * Controls the destination wallet transaction for xReserve private delivery or CCTP minting.
+ * Controls the destination wallet transaction for private delivery or CCTP minting.
  *
+ * @property hyperlane Optional Hyperlane claim scalar and recipient proof. Omission requests wallet fulfillment.
  * @property circle Circle-specific options: the CCTP manual-mint override, or the identity store, wallet preparation and nonce input, or legacy secret nonce for a private xReserve mint.
  * @property cctp Manual-mint override for an attested, unused CCTP message when forwarding stalls.
  * @property privateMintSecretNonce Legacy caller-managed secret Aleo scalar for a private xReserve mint.
@@ -263,6 +265,7 @@ export type GetStatusParameters = {
  * @property onProgress Optional awaited callback for Aleo proving and submission boundaries.
  */
 type CompleteOptions = {
+  hyperlane?: HyperlaneClaimOptions | undefined
   skipRouteStatus?: boolean | undefined
   circle?: CompleteCircleOptions | undefined
   /** @deprecated Use `circle.manualMint`. Removed in the next major release. */
@@ -285,6 +288,7 @@ type CompleteOptions = {
  * @property progress Recovered progress whose next operation is `complete`, or `wait` when manually minting CCTP.
  * @property plan Route, assets, amount, and recipient retained while the application stayed open.
  * @property receipt Circle-attested transfer state retained while the application stayed open.
+ * @property hyperlane Optional Hyperlane claim scalar and recipient proof. Omission requests wallet fulfillment.
  * @property circle Circle-specific options: the CCTP manual-mint override, or the identity store, wallet preparation and nonce input, or legacy secret nonce for a private xReserve mint.
  * @property cctp Manual-mint override for an attested, unused CCTP message when forwarding stalls.
  * @property privateMintSecretNonce Legacy caller-managed secret Aleo scalar for a private xReserve mint.
