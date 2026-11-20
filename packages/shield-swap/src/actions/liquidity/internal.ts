@@ -106,9 +106,8 @@ export function validateRebalanceAmounts(params: RebalanceAmountParameters & {
   liquidityTarget?: bigint; oldLiquidity?: bigint; recovered0?: bigint; recovered1?: bigint
   required0?: bigint; required1?: bigint; maxFunding0?: bigint; maxFunding1?: bigint
 }): void {
-  if (params.liquidityTarget !== undefined && (params.maxFunding0 !== undefined || params.maxFunding1 !== undefined)) {
-    throw new Error('Pass exactly one sizing mode: liquidityTarget, or maxFunding0 and maxFunding1 together')
-  }
+  // Planners check sizing-mode conflicts. Execution can also carry the original
+  // funding budgets alongside a completed plan or an explicit liquidity target.
   const fields = ['liquidityTarget', 'oldLiquidity', 'recovered0', 'recovered1', 'required0', 'required1',
     'maxFunding0', 'maxFunding1', 'amount0Desired', 'amount1Desired', 'amount0Min', 'amount1Min',
     'funded0', 'funded1', 'refund0', 'refund1'] as const

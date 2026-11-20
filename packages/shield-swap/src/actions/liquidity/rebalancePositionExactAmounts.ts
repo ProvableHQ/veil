@@ -1,12 +1,14 @@
 import type { Client } from '@provablehq/veil-core'
 import { rebalancePosition, type RebalancePositionParameters, type RebalancePositionReturnType } from './rebalancePosition.js'
-import type { RebalanceSizing } from './planRebalance.js'
+import type { RebalancePlan, RebalanceSizing } from './planRebalance.js'
 import { exactRebalanceParameters } from './internal.js'
 
 /**
  * Configures {@link rebalancePositionExactAmounts}; shared options follow {@link RebalancePositionParameters}.
+ * A complete plan may retain its original maxFunding0/maxFunding1 inputs;
+ * execution uses the plan's target and derived transfers.
  */
-export type RebalancePositionExactAmountsParameters = RebalancePositionParameters & RebalanceSizing
+export type RebalancePositionExactAmountsParameters = RebalancePositionParameters & (RebalanceSizing | RebalancePlan)
 
 /** Returns the transaction, successor identity, and submitted plan. */
 export type RebalancePositionExactAmountsReturnType = RebalancePositionReturnType

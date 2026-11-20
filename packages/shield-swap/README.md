@@ -996,12 +996,19 @@ wallet funds while the planner calculates an exact target **before submission**.
 Those funding budgets do not select execution-time sizing.
 
 ```ts
-const plan = await client.planRebalanceExactAmounts({
+const params = {
   poolKey, positionTokenId, tickLower, tickUpper,
   maxFunding0: 0n, maxFunding1: 0n,
-})
-await client.rebalancePositionExactAmounts({ ...plan, imports })
+}
+const plan = await client.planRebalanceExactAmounts(params)
+await client.rebalancePositionExactAmounts({ ...params, ...plan, imports })
 ```
+
+Execution accepts a complete plan merged with its original funding-budget
+parameters; the plan's target and transfers govern the submission. The general
+`rebalancePosition` executor also gives an explicit `liquidityTarget` precedence
+over funding budgets when building a plan. Planner calls require exactly one
+sizing mode.
 
 The plan includes all recovered principal, previously owed tokens, and accrued
 fees. Any surplus is included in the fixed refund to the withdrawal address.

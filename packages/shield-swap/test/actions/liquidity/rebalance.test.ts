@@ -294,8 +294,8 @@ describe('planRebalance', () => {
     })).rejects.toThrow(/supports no liquidity/)
   })
 
-  it('rejects ambiguous sizing', async () => {
-    await expect(planRebalance(offlineClient(), {
+  it.each([planRebalance, sdk.planRebalanceExactAmounts])('rejects ambiguous planner sizing: %#', async planner => {
+    await expect(planner(offlineClient(), {
       poolKey: POOL_KEY, positionTokenId: POSITION_ID,
       tickLower: OLD_LOWER, tickUpper: OLD_UPPER,
       liquidityTarget: 1n, maxFunding0: 0n, maxFunding1: 0n,
@@ -315,14 +315,6 @@ describe('planRebalance', () => {
     expect(plan.refund1).toBe(10_121n)
   })
 
-  it('rejects an executor call that mixes a target and quote-time funding budgets', async () => {
-    await expect(rebalancePosition(offlineClient(), {
-      poolKey: POOL_KEY, positionTokenId: POSITION_ID,
-      tickLower: OLD_LOWER, tickUpper: OLD_UPPER, liquidityTarget: 500_000n,
-      maxFunding0: 0n, maxFunding1: 0n,
-    })).rejects.toThrow(/exactly one sizing/)
-  })
-
   it('rejects a missing position', async () => {
     await expect(planRebalance(fakeClient('local'), {
       poolKey: POOL_KEY, positionTokenId: '999field',
@@ -332,6 +324,56 @@ describe('planRebalance', () => {
 })
 
 describe('rebalancePosition', () => {
+  it.each(['local', 'rpc'] as const)('submits a budget plan merged with its original parameters through %s accounts', async accountType => {
+    const params = {
+      poolKey: POOL_KEY, positionTokenId: POSITION_ID,
+      tickLower: OLD_LOWER, tickUpper: OLD_UPPER,
+      maxFunding0: 10_000n, maxFunding1: 10_000n,
+      ...OVERRIDE_STATE,
+    }
+    const plan = await sdk.planRebalanceExactAmounts(offlineClient(), params)
+    const request = {
+      ...params, ...plan,
+      token0Record: TOKEN0_RECORD, token1Record: TOKEN0_RECORD,
+      positionRecord: positionRecord(TOKEN0, TOKEN1),
+      proofs: async () => FIXTURE_PROOFS,
+      // A complete plan must be used verbatim even when the supplied state differs.
+      slot: { ...OVERRIDE_STATE.slot, sqrt_price: getSqrtPriceAtTickX128(200) },
+    }
+    executeMock.mockResolvedValue({ transactionId: 'at1budget', outputs: ['777field'] } as never)
+    writeMock.mockResolvedValue('at1budget')
+    for (const execute of [rebalancePosition, sdk.rebalancePositionExactAmounts]) {
+      const result = await execute(fakeClient(accountType), request)
+      expect(result.plan).toMatchObject({
+        oldLiquidity: plan.oldLiquidity, liquidityTarget: plan.liquidityTarget,
+        recovered0: plan.recovered0, recovered1: plan.recovered1,
+        required0: plan.required0, required1: plan.required1,
+        funded0: plan.funded0, funded1: plan.funded1,
+        refund0: plan.refund0, refund1: plan.refund1,
+      })
+      const calls = accountType === 'local' ? executeMock.mock.calls : writeMock.mock.calls
+      const call = calls.at(-1)![1]
+      expect(call.function).toBe('rebalance_plain_plain_both')
+      const submitted = call.inputs!.find(input => typeof input === 'string' && input.startsWith('{ old_liquidity:'))
+      expect(submitted).toContain(`liquidity_target: ${plan.liquidityTarget}u128`)
+      expect(submitted).toContain(`funded0: ${plan.funded0}u128`)
+      expect(submitted).toContain(`funded1: ${plan.funded1}u128`)
+    }
+  })
+
+  it('keeps an explicit execution target when original funding budgets are also present', async () => {
+    executeMock.mockResolvedValue({ transactionId: 'at1target', outputs: ['777field'] } as never)
+    const result = await rebalancePosition(fakeClient('local'), {
+      poolKey: POOL_KEY, positionTokenId: POSITION_ID,
+      tickLower: OLD_LOWER, tickUpper: OLD_UPPER,
+      liquidityTarget: 500_000n, maxFunding0: 10_000n, maxFunding1: 10_000n,
+      proofs: async () => FIXTURE_PROOFS,
+    })
+    expect(result.plan.liquidityTarget).toBe(500_000n)
+    expect(result.plan.funded0).toBe(0n)
+    expect(result.plan.funded1).toBe(0n)
+  })
+
   it('exposes exact, liquidity-target, and amount-driven helpers through the client', async () => {
     const actions = sdk.shieldSwapActions()(fakeClient('local'))
     for (const name of ['rebalancePositionExactAmounts', 'rebalancePositionToLiquidity', 'rebalancePositionFromAmounts',

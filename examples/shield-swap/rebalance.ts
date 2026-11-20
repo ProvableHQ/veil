@@ -46,21 +46,23 @@ export async function rebalance() {
   // principal at the current price plus all fees (including those not yet
   // checkpointed on chain), then solves for the largest liquidity the new
   // range supports from that alone. Nothing is spent by planning.
-  const plan = await client.planRebalanceExactAmounts({
+  const params = {
     poolKey: position.poolKey,
     positionTokenId: position.positionTokenId,
     tickLower,
     tickUpper,
     maxFunding0: 0n,
     maxFunding1: 0n,
-  })
+  }
+  const plan = await client.planRebalanceExactAmounts(params)
   console.log(`recovering ${formatUnits(plan.recovered0, token0.decimals)} ${token0.symbol}`)
   console.log(`           ${formatUnits(plan.recovered1, token1.decimals)} ${token1.symbol}`)
   console.log(`refunding  ${formatUnits(plan.refund0, token0.decimals)} ${token0.symbol}`)
   console.log(`           ${formatUnits(plan.refund1, token1.decimals)} ${token1.symbol}`)
   console.log(`new range  [${plan.tickLower}, ${plan.tickUpper}) at liquidity ${plan.liquidityTarget}`)
 
-  // Submit the plan by spreading it into the call. Passing the fields through
+  // Spread the plan after the original parameters so its target and transfers
+  // govern execution; the original funding budgets are ignored. Passing it through
   // keeps the submitted numbers exactly the ones printed above; calling
   // rebalancePosition with the sizing instead would replan against whatever
   // the pool looks like at that moment — also fine, just different numbers.
@@ -71,7 +73,7 @@ export async function rebalance() {
   const imports = await client.resolveDexImports({
     tokenPrograms: [token0.ammTokenProgram!, token1.ammTokenProgram!],
   })
-  const result = await client.rebalancePositionExactAmounts({ ...plan, imports })
+  const result = await client.rebalancePositionExactAmounts({ ...params, ...plan, imports })
   console.log(`rebalanced (tx ${result.transactionId})`)
   console.log(`successor position ${result.positionTokenId}`)
 

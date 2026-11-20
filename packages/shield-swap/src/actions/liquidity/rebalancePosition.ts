@@ -68,8 +68,8 @@ const REBALANCE_DEADLINE_OFFSET_BLOCKS = 20
  *   record inputs are opaque.
  * @property liquidityTarget Positive exact successor liquidity, or zero for execution-time sizing (u128).
  *   Zero requires explicit desired amounts when planning in this call.
- * @property maxFunding0 Token0 funding budget (u128) — the other sizing mode.
- * @property maxFunding1 Token1 funding budget (u128).
+ * @property maxFunding0 Token0 funding budget (u128); ignored when liquidityTarget is supplied.
+ * @property maxFunding1 Token1 funding budget (u128); ignored when liquidityTarget is supplied.
  * @property amount0Desired Optional token0 consumption cap; supplied with amount1Desired.
  * @property amount1Desired Optional token1 consumption cap (u128 raw units).
  * @property amount0Min Token0 minimum; defaults to its desired cap.
