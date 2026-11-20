@@ -214,6 +214,7 @@ export {
   selectRebalanceEntry,
   type PlanRebalanceParameters,
   type RebalancePlan,
+  type RebalanceAmountParameters,
   type RebalancePoolState,
   type RebalancePositionState,
   type RebalanceSizing,
@@ -226,6 +227,12 @@ export {
   type RebalancePositionParameters,
   type RebalancePositionReturnType,
 } from './actions/liquidity/rebalancePosition.js'
+export { planRebalanceExactAmounts, type PlanRebalanceExactAmountsParameters, type PlanRebalanceExactAmountsReturnType } from './actions/liquidity/planRebalanceExactAmounts.js'
+export { rebalancePositionExactAmounts, type RebalancePositionExactAmountsParameters, type RebalancePositionExactAmountsReturnType } from './actions/liquidity/rebalancePositionExactAmounts.js'
+export { planRebalanceToLiquidity, type PlanRebalanceToLiquidityParameters, type PlanRebalanceToLiquidityReturnType } from './actions/liquidity/planRebalanceToLiquidity.js'
+export { rebalancePositionToLiquidity, type RebalancePositionToLiquidityParameters, type RebalancePositionToLiquidityReturnType } from './actions/liquidity/rebalancePositionToLiquidity.js'
+export { planRebalanceFromAmounts, type PlanRebalanceFromAmountsParameters, type PlanRebalanceFromAmountsReturnType } from './actions/liquidity/planRebalanceFromAmounts.js'
+export { rebalancePositionFromAmounts, type RebalancePositionFromAmountsParameters, type RebalancePositionFromAmountsReturnType } from './actions/liquidity/rebalancePositionFromAmounts.js'
 export {
   increaseLiquidity,
   type IncreaseLiquidityParameters,

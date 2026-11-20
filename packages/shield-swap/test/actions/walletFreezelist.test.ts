@@ -58,6 +58,18 @@ const mintParams = { ...base, tickLower: -120, tickUpper: 120, amount0Desired: 1
 const increaseParams = { ...base, amount0Desired: 100n, amount1Desired: 100n, positionRecord: position, token0Record: record, token1Record: record, tickLowerHint: -600, tickUpperHint: -120 }
 const collectParams = { ...base, amount0Requested: 100n, amount1Requested: 100n, positionRecord: position, withdrawalAddress: withdrawal }
 const rebalanceParams = { ...base, positionRecord: position, positionTokenId: '3field', withdrawalAddress: withdrawal, tickLower: -120, tickUpper: 120, tickLowerHint: -600, tickUpperHint: -120, nonce: '1field', liquidityTarget: 100n, oldLiquidity: 100n, recovered0: 10n, recovered1: 10n, required0: 10n, required1: 10n, funded0: 0n, funded1: 0n, refund0: 0n, refund1: 0n, token0Record: record, token1Record: record }
+
+// Keep the exact deposit fixed while funding covers the missing recovery.
+function rebalanceWithFunding(funded0: bigint, funded1: bigint) {
+  return {
+    ...rebalanceParams,
+    recovered0: rebalanceParams.required0 - funded0,
+    recovered1: rebalanceParams.required1 - funded1,
+    funded0,
+    funded1,
+  }
+}
+
 const write = vi.mocked(writeContract)
 const execute = vi.mocked(executeContract)
 const abis = Object.fromEntries(['shield_swap', 'shield_swap_router', 'shield_swap_lp_router', 'shield_swap_rebalance_router'].map(name => {
@@ -98,7 +110,7 @@ describe('automatic and literal action inputs', () => {
       ['collect', (override: object) => collect(client(w0, w1), { ...collectParams, ...override })],
       ...[0n, 5n].flatMap(funded0 => [0n, 5n].map(funded1 => [
         `rebalance ${funded0}/${funded1}`,
-        (override: object) => rebalancePosition(client(w0, w1), { ...rebalanceParams, funded0, funded1, ...override }),
+        (override: object) => rebalancePosition(client(w0, w1), { ...rebalanceWithFunding(funded0, funded1), ...override }),
       ] as const)),
       ...[0n, 5n].map(remainder => [
         `claim ${remainder}`,
@@ -144,7 +156,7 @@ describe('wallet freezelist requests in action inputs', () => {
     for (const fund0 of [0n, 1n]) for (const fund1 of [0n, 1n]) {
       it(`rebalance route ${pair} funding ${fund0}/${fund1} includes only consumed sender proofs`, async () => {
         const provider = vi.fn(proofs)
-        await rebalancePosition(client(w0, w1), { ...rebalanceParams, funded0: fund0, funded1: fund1, proofs: provider })
+        await rebalancePosition(client(w0, w1), { ...rebalanceWithFunding(fund0, fund1), proofs: provider })
         const expected: [string, string][] = [
           ...(w0 && fund0 ? [['a_list.aleo', signer] as [string, string]] : []),
           ...(w1 && fund1 ? [['b_list.aleo', signer] as [string, string]] : []),

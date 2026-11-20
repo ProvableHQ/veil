@@ -317,12 +317,12 @@ export function formatMintPositionRequest(req: MintPositionRequestInput): string
  * @property oldLiquidity The old position's full liquidity (u128).
  * @property recovered0 Exact token0 recovered by closing the old range:
  *   principal plus `tokens_owed0` (u128).
- * @property recovered1 Exact token1 recovered, principal plus owed (u128).
+ * @property recovered1 Quoted token1 recovery; ignored with flexible recovery (u128).
  * @property funded0 Additional token0 supplied by the caller (u128).
  * @property funded1 Additional token1 supplied by the caller (u128).
- * @property refund0 Token0 surplus paid back to the withdrawal address (u128).
- * @property refund1 Token1 surplus paid back (u128).
- * @property liquidityTarget Exact liquidity of the successor position (u128).
+ * @property refund0 Fixed immediate token0 payout to the withdrawal address (u128).
+ * @property refund1 Fixed immediate token1 payout (u128).
+ * @property liquidityTarget Positive exact successor liquidity, or zero for execution-time amount sizing (u128).
  * @property mint The successor position's mint request.
  * @property deadline Block height the request expires at (u32).
  */
