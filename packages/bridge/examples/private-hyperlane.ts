@@ -1,6 +1,7 @@
 import type { Client } from '@provablehq/veil-core'
 import {
   hyperlanePrivateClaimGrants,
+  hyperlanePrivateTransferGrants,
   hyperlane,
   type BridgePlan,
   type BridgeRegistry,
@@ -9,6 +10,7 @@ import {
   type BridgeProgress,
   type HyperlaneOptions,
   type QuoteParameters,
+  type HyperlanePrivateTransferOptions,
 } from '@provablehq/aleo-bridge-sdk'
 
 /**
@@ -83,6 +85,32 @@ export async function recoverPrivateHyperlaneExample(bridge: BridgeClient, check
  */
 export async function quotePrivateHyperlaneOutboundExample(publicClient: Client, options: { registry: BridgeRegistry; plan: BridgePlan }) {
   // The included protocol fee reduces net destination tokens; the token record
-  // covers the gross spend. Private outbound execution remains a separate integration.
+  // covers the gross spend. Execution uses the explicit private outbound path below.
   return hyperlane.aleo.quotePrivateTransfer(publicClient, options)
+}
+
+
+/**
+ * Inspects a private outbound quote and optionally executes and follows the transfer.
+ * Requires a reviewed private deployment, signer proof and record grants, and a
+ * destination balance reader. Defaults to inspection without signing or moving funds.
+ * @param bridge Supplies bound source and destination clients and the reviewed registry.
+ * @param plan Supplies the original gross token amount and external-chain recipient.
+ * @param funding Supplies the displayed private quote and optional local record or proof overrides.
+ * @param options Enables execution explicitly and optionally persists each recovery checkpoint. Defaults to inspection only.
+ * @returns The quote and signer grant, plus current progress when execution is enabled.
+ * @throws Error When preparation or execution fails; a submitted-error checkpoint must be recovered before retrying.
+ * @example await runPrivateHyperlaneOutboundExample(bridge, plan, { quote }, { execute: true, save })
+ */
+export async function runPrivateHyperlaneOutboundExample(
+  bridge: BridgeClient,
+  plan: BridgePlan,
+  funding: HyperlanePrivateTransferOptions,
+  options: { execute?: boolean; save?: (checkpoint: BridgeCheckpoint) => void | Promise<void> } = {},
+) {
+  const grants = hyperlanePrivateTransferGrants({ registry: bridge.registry, plan })
+  if (!options.execute) return { quote: funding.quote, grants }
+  const result = await bridge.execute({ plan, hyperlanePrivateTransfer: funding, onCheckpoint: options.save })
+  const progress = await bridge.wait({ progress: { next: 'wait', plan, receipt: result.receipt } })
+  return { quote: funding.quote, grants, progress }
 }

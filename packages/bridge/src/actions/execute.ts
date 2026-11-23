@@ -1,3 +1,4 @@
+import { executeAleoHyperlanePrivateTransfer } from '../protocols/hyperlane/privateTransfer.js'
 import { hyperlaneRecipient } from '../protocols/hyperlane/privateMint.js'
 import { planSubject, withBridgeContext } from './internal/clientContext.js'
 import * as cctp from '../protocols/cctp/evm.js'
@@ -113,6 +114,15 @@ export async function execute(
   fetcher: typeof fetch = globalThis.fetch,
 ): Promise<BridgeExecution> {
   clients = withBridgeContext(clients, 'execute', planSubject(params.plan))
+  if (params.hyperlanePrivateTransfer !== undefined) {
+    if (params.mode !== undefined && params.mode !== 'private') throw new BridgeError('Private Hyperlane execution conflicts with the selected public mode')
+    if (params.gasPaymentMicrocredits !== undefined) throw new BridgeError('Private Hyperlane hook payments come from its approved private quote')
+    return { kind: 'aleo-hyperlane', ...await executeAleoHyperlanePrivateTransfer(registry, clients, {
+      ...params.hyperlanePrivateTransfer, plan: params.plan, privateFee: params.privateFee,
+      skipRouteStatus: params.skipRouteStatus, onCheckpoint: params.onCheckpoint, onProgress: params.onProgress,
+    }) }
+  }
+
   // Refuse a halted route before any wallet interaction so a pause costs the
   // caller no proving time or fees.
   if (!params.skipRouteStatus) await assertRouteNotPaused(registry, clients, params.plan.route.id)

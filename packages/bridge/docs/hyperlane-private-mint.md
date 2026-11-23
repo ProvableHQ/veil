@@ -179,10 +179,11 @@ identity, submits a claim, or caches mutable balances.
 
 ## Account for private outbound transfer fees
 
-`transfer_remote_private` is a separate eleven-input outbound ABI. The SDK's
-current execution helpers submit only public `transfer_remote` or
-`transfer_remote_as_signer` calls. The private fee helper below provides
-read-only accounting; it does not enable private outbound execution.
+`transfer_remote_private` is a separate eleven-input outbound ABI. The default
+execution path retains the public `transfer_remote` and
+`transfer_remote_as_signer` calls. Private execution requires an explicit
+`hyperlanePrivateTransfer` option or `hyperlane.aleo.executePrivateTransfer`,
+using a reviewed private quote and the deployment activation described below.
 
 Bridge quotes read Aleo or the source protocol directly. They do not fetch
 quotes from wallet-services-api. Existing public Aleo Hyperlane quotes report
@@ -257,5 +258,121 @@ An execution integration MUST reread the fee and revalidate the reviewed
 metadata, hooks, allowances, record funding, and net amount before authorization.
 Supply the freshly checked fee rate at input 10 and sender exclusion proofs at
 input 9. The inbound claim's secret at input 3 is unrelated to this outbound
-call. Existing public transfer builders do not accept private mode and must not
-be used to submit `transfer_remote_private`.
+call. Existing public transfer builders retain their seven-input interfaces. Use
+`buildAleoHyperlanePrivateTransferCall` to inspect the separate private ABI;
+do not persist its private inputs.
+
+
+## Execute a private outbound transfer
+
+Private execution supports the reviewed token-warp `transfer_remote_private_v1`
+ABI with a u128 `Token` record and a separate `credits` dispatch record. Keep
+unverified private deployments disabled. In addition to the private fee quote
+metadata above, an injected route MUST provide:
+
+| Field | Required value |
+| --- | --- |
+| `aleoPrivateTransferExecutionVerified` | `true` after verifying the complete eleven-input ABI |
+| `aleoPrivateTransferTokenProgram` | Exact program defining the input `Token`; must match the source asset's privacy program |
+| `aleoPrivateTransferFreezelistProgram` | Program whose signer exclusion proofs the private transition verifies |
+| `aleoMailboxProgram` | Reviewed source mailbox program whose `mailbox[true]` contains the hook configuration |
+| `aleoPrivateTransferPauseMapping` | Reviewed mapping holding `[inbound_paused, outbound_paused]`, such as `bridge_pause` |
+| `aleoPrivateTransferPauseKey` | Exact boolean key, such as `true` |
+
+The SDK reads the source warp's `app_metadata[true]` and
+`remote_routers[destination_domain]`, the source mailbox state, and the private
+outbound pause flag. Live app metadata, enrollment, and hooks must match the
+reviewed registry. A mismatch requires refreshing the reviewed registry and
+obtaining another quote; execution does not adopt unreviewed deployment data.
+The bundled catalog does not implicitly enable private execution.
+
+Connect the issuing Aleo wallet with
+`hyperlanePrivateTransferGrants({ registry, plan })` to authorize the signer
+exclusion proof at input nine. Record grants must permit wallet selection for
+the source token and dispatch credits. A wallet can allow filtering those
+balances without disclosing their plaintext:
+
+```ts
+const privacy = {
+  algorithmsAllowed: hyperlanePrivateTransferGrants({ registry, plan }),
+  recordAccess: {
+    level: 'byProgram',
+    programs: [
+      { program: tokenProgram, records: [{ recordname: 'Token', fields: [{ name: 'amount', readAccess: false }] }] },
+      { program: 'credits.aleo', records: [{ recordname: 'credits', fields: [{ name: 'microcredits', readAccess: false }] }] },
+    ],
+  },
+}
+```
+
+Obtain a current private quote, display its gross spend, token fee, net
+amount, and dispatch credits requirement, then explicitly execute it:
+
+```ts
+const quote = await hyperlane.aleo.quotePrivateTransfer(publicClient, { registry, plan })
+const result = await bridge.execute({
+  plan,
+  hyperlanePrivateTransfer: { quote },
+  onCheckpoint: save,
+})
+```
+
+The equivalent standalone helper is
+`hyperlane.aleo.executePrivateTransfer(clients, { registry, plan, quote, onCheckpoint: save })`.
+`clients` supplies the Aleo signer and destination network access keyed by
+registry chain id. A destination wallet is not needed. A destination balance
+reader is required so checkpoints can track the net amount instead of
+incorrectly waiting for the gross amount.
+
+Wallet accounts receive private record requests covering the gross token
+amount and summed dispatch payments; the application does not scan or decrypt
+their records. `tokenRecord` and `dispatchCreditsRecord` can pin wallet uids or
+supply record plaintext. Local accounts select the smallest eligible unreserved
+records through their existing Veil inventory. Supply `recordClient` when the
+signing wrapper does not expose a full Veil client, or provide explicit record
+literals. A local record client must use the same signer and network.
+
+The SDK validates plaintext funding, ownership, and distinct record nonces.
+Local signer proofs are generated through existing compliance capabilities or
+an explicit `merkleProof`; wallets derive the reviewed signer proof. Private
+execution fees default to false. Wallet accounts pay public execution fees
+because their existing protocol cannot pin a separate fee record. Local
+accounts can pass `privateFee: true` with a distinct `feeRecord` inside
+`hyperlanePrivateTransfer`. Its actual prepared fee is checked before broadcast.
+The fee record is separate from the dispatch record, and both are separate from
+the token record.
+
+Execution rejects changed intent, fees, hook payments, or net amounts before
+wallet authorization. Local execution also verifies the exact public inputs,
+record serial-number separation, live configuration, fees, and pause state
+after proving and before broadcast. Wallets own their atomic proving and
+broadcast operation; the chain still enforces current fee and configuration
+values at finalization. An account switch during local preparation stops
+broadcast. Existing public calls and xReserve flows keep their interfaces.
+
+## Recover a private outbound transfer
+
+Persist every `onCheckpoint` value. Local proving emits a checkpoint before
+broadcast containing the immutable proved transaction, a private-outbound
+marker, and destination balance verification. It excludes record plaintext,
+proof requests, and standalone fee records. After submission, the checkpoint
+retains the source transaction id and expected **net** destination increase.
+
+Use `bridge.recover({ checkpoint })`. Prepared private bytes return
+`next: 'resume'`; `bridge.resume` revalidates live configuration and fees, then
+broadcasts those exact bytes. It does not select records, require signing keys,
+or build a new proof. Changed fees, tampered public inputs, or a replaced public
+call block rebroadcast. The original checkpoint remains available for review.
+
+Submitted private transfers return observation state while their source outcome
+is pending or unknown. Once Aleo accepts the transaction, delivery checks compare
+the saved destination baseline against the net remote amount. Balance-based
+verification has the same limitation as existing outbound tracking: unrelated
+recipient balance activity can affect the observation. Recovery never infers
+source failure from a missing transaction or automatically repeats a transfer.
+
+If a callback fails after submission, `PrivateHyperlaneSubmissionError` exposes
+`receipt` and `checkpoint`. Recover that checkpoint before retrying. A callback
+that fails at the local prepared boundary stops broadcast. See
+[`runPrivateHyperlaneOutboundExample`](../examples/private-hyperlane.ts) for
+quote inspection by default and explicitly enabled execution with recovery hooks.

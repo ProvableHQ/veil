@@ -451,6 +451,7 @@ export type BridgeReceipt = {
  * @property transferId Optional request-grouping identifier carried from the quoted plan. Not a secret; omitted when the plan had none.
  * @property source Prepared or submitted source transactions.
  * @property source.approvalTransactionIds Source token approval transaction identifiers in submission order.
+ * @property source.privateHyperlane Marks private outbound Hyperlane bytes so recovery cannot replace them with a public call. Omitted for other flows.
  * @property source.transactionId Irreversible source transfer transaction when submitted.
  * @property source.preparedTransaction Fully proved Aleo transaction retained before broadcast for idempotent recovery.
  * @property source.hookData Public xReserve hook committed by a submitted approval sequence.
@@ -472,6 +473,7 @@ export type BridgeCheckpoint = {
   }
   transferId?: string | undefined
   source?: {
+    privateHyperlane?: true | undefined
     approvalTransactionIds?: readonly string[] | undefined
     replacedApprovalTransactionIds?: readonly string[] | undefined
     transactionId?: string | undefined

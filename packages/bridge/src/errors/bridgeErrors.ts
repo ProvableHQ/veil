@@ -1,3 +1,4 @@
+import type { BridgeCheckpoint, BridgeReceipt } from '../types/protocol.js'
 import type { BridgeRouteStatus, BridgeRouteStatusSource } from '../types/actions.js'
 
 /**
@@ -48,4 +49,32 @@ export function describePauseSource(source: BridgeRouteStatusSource): string {
   return source.kind === 'aleo-mapping'
     ? `${source.program}/${source.mapping}[${source.key}]`
     : `${source.chainId}:${source.address}`
+}
+
+/**
+ * Preserves a submitted private Hyperlane transfer when a later callback or tracking step fails.
+ * The attached state contains public recovery data and no private record inputs.
+ * @property receipt Identifies the submitted source transaction that must be observed before retrying.
+ * @property checkpoint Restores the submitted transfer through bridge.recover.
+ * @example
+ * if (error instanceof PrivateHyperlaneSubmissionError) {
+ *   const progress = await bridge.recover({ checkpoint: error.checkpoint })
+ * }
+ */
+export class PrivateHyperlaneSubmissionError extends BridgeError {
+  readonly receipt: BridgeReceipt
+  readonly checkpoint: BridgeCheckpoint
+
+  /**
+   * Captures the public state of an already submitted private transfer.
+   * @param receipt Supplies the submitted source transaction and net destination verification.
+   * @param checkpoint Supplies compact public recovery state.
+   * @param cause Supplies the callback or tracking failure; no network access occurs.
+   */
+  constructor(receipt: BridgeReceipt, checkpoint: BridgeCheckpoint, cause: unknown) {
+    super('Private Hyperlane transfer was submitted; recover its checkpoint before retrying', { cause })
+    this.name = 'PrivateHyperlaneSubmissionError'
+    this.receipt = receipt
+    this.checkpoint = checkpoint
+  }
 }

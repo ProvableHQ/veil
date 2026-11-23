@@ -1,3 +1,4 @@
+import { validatePreparedPrivateTransfer } from '../protocols/hyperlane/privateTransfer.js'
 import { isHash, type Hash } from 'viem'
 import { hyperlaneRecipient, privateClaimStatus } from '../protocols/hyperlane/privateMint.js'
 import { planSubject, withBridgeContext } from './internal/clientContext.js'
@@ -80,6 +81,12 @@ export async function resume(
     if (typeof transactionId !== 'string' || transactionId !== receipt.id) {
       throw new BridgeError('Prepared Aleo recovery transaction id does not match its payload')
     }
+    const privateHyperlane = receipt.protocolState.sourceFunction === 'transfer_remote_private'
+      || (decoded as Transaction).execution?.transitions.some(t => t.function === 'transfer_remote_private')
+    if (plan.protocol === 'hyperlane' && privateHyperlane) {
+      await validatePreparedPrivateTransfer(registry, clients, plan, decoded as Transaction,
+        typeof receipt.protocolState.expectedDestinationIncreaseAtomic === 'string' ? receipt.protocolState.expectedDestinationIncreaseAtomic : undefined)
+    }
     if (plan.protocol === 'verulink') validateAleoSource(verulinkContext(registry, clients, plan), plan, decoded as Transaction)
     try {
       const submittedId = await requireAleoClient(
@@ -110,6 +117,7 @@ export async function resume(
       sourceTxId: transactionId,
       protocolState: {
         routeId: plan.route.id,
+        ...(privateHyperlane ? { sourceFunction: 'transfer_remote_private' } : {}),
         ...(typeof receipt.protocolState.destinationBalanceBeforeAtomic === 'string'
           ? { destinationBalanceBeforeAtomic: receipt.protocolState.destinationBalanceBeforeAtomic }
           : {}),

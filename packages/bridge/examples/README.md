@@ -699,5 +699,7 @@ address encodings by counter without Circle API requests.
 
 `quotePrivateHyperlaneOutboundExample` reads a reviewed private outbound fee
 mapping, reports gross token funding and net destination tokens, and sums both
-private dispatch hook payments. It is read-only; it does not submit the private
-transition or replace the public outbound execution examples.
+private dispatch hook payments. It is read-only. `runPrivateHyperlaneOutboundExample` adds explicit private
+execution and net delivery tracking while the existing public outbound examples
+retain their behavior. Local records and proved transactions use checkpoint
+recovery; wallet records remain selected privately in the wallet.

@@ -40,6 +40,8 @@ describe.runIf(process.env.VEIL_INTEGRATION === '1')('Public Shield Swap market 
 // a connected wallet after the matching connect-time grant is approved.
 describe('Wallet freezelist proof setup', () => {
   it('deducts the included private outbound Hyperlane fee from gross token funding', () => {
+    // The private execution path spends gross tokens and tracks net destination
+    // delivery. It uses a separate eleven-input call; public builders remain unchanged.
     const amounts = calculateHyperlanePrivateTransferAmount({ amountAtomic: 10_000n, feeBps: 25 })
     expect(amounts).toEqual({ grossAmountAtomic: 10_000n, protocolFeeAtomic: 25n, netAmountAtomic: 9975n })
   })

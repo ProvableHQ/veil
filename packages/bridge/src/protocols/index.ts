@@ -1,3 +1,6 @@
+import { executeAleoHyperlanePrivateTransfer } from './hyperlane/privateTransfer.js'
+import type { BridgeChainClients } from '../connections/resolve.js'
+import type { ExecuteAleoHyperlanePrivateTransferParameters } from '../types/hyperlanePrivateTransfer.js'
 import { quoteAleoHyperlanePrivateTransfer } from './hyperlane/privateTransferFees.js'
 import type { QuoteAleoHyperlanePrivateTransferParameters } from '../types/hyperlanePrivateTransfer.js'
 import type { Client } from '@provablehq/veil-core'
@@ -59,6 +62,19 @@ function splitRegistry<Params extends object>(
  */
 export const hyperlane = {
   aleo: {
+    /**
+     * Executes a separate private outbound transfer after revalidating its displayed quote.
+     * Selects records, supplies signer proofs, proves and signs, and persists recoverable public state.
+     * @param clients Supplies the source signer and destination balance reader keyed by registry chain id.
+     * @param params Supplies the approved quote, plan, optional private funding, and registry. The registry defaults to the bundled public-only catalog.
+     * @returns The Aleo transaction id and source confirmation receipt with net destination verification.
+     * @throws BridgeError When deployment metadata, records, live configuration, or approved fees are invalid, or submission fails.
+     * @example const result = await hyperlane.aleo.executePrivateTransfer(clients, { registry, plan, quote, onCheckpoint: save })
+     */
+    executePrivateTransfer(clients: BridgeChainClients, params: ExecuteAleoHyperlanePrivateTransferParameters & ProtocolHelperRegistry) {
+      const [registry, actionParams] = splitRegistry<ExecuteAleoHyperlanePrivateTransferParameters>(params)
+      return executeAleoHyperlanePrivateTransfer(registry, clients, actionParams)
+    },
     /**
      * Quotes token deductions and both hook payments for a private outbound transfer.
      * Reads the reviewed warp's fee mapping and hook state without signing or

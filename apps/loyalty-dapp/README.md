@@ -50,4 +50,8 @@ Private outbound Hyperlane fee inspection uses
 `hyperlane.aleo.quotePrivateTransfer` with reviewed private ABI and fee-mapping
 metadata. The token protocol fee is included in the gross record spend and
 reduces destination tokens; dispatch credits and Aleo execution fees are
-separate. The current SDK outbound execution helpers remain public-only.
+separate. Use the explicit `hyperlanePrivateTransfer` execution option for reviewed
+eleven-input private deployments; public outbound helpers keep their signatures.
+The private path selects token and dispatch records, derives signer proofs,
+revalidates fees, and checkpoints local proving before broadcast. Delivery
+tracking uses the net amount.

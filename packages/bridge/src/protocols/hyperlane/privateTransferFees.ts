@@ -1,7 +1,7 @@
 import { readContract, type Client } from '@provablehq/veil-core'
 import { resolveTransferRoute } from '../../actions/internal/resolveTransferRoute.js'
 import { BridgeError } from '../../errors/bridgeErrors.js'
-import type { BridgeRegistry } from '../../types/protocol.js'
+import type { BridgeRegistry, BridgePlan } from '../../types/protocol.js'
 import type {
   AleoHyperlanePrivateTransferQuote,
   HyperlanePrivateTransferAmount,
@@ -93,10 +93,22 @@ function uint(value: unknown, width: 8 | 128, label: string): bigint {
   return result
 }
 
+/** Binds gross amounts, recipient, programs, and reviewed public inputs without contacting a network. @internal */
+export function privateTransferFingerprint(registry: BridgeRegistry, plan: BridgePlan): string {
+  const { route, sourceAsset, destinationAsset } = resolveTransferRoute(registry, plan)
+  const call = buildTransferRemoteCall(registry, { plan: { ...plan, sourceAsset, destinationAsset }, gasPaymentMicrocredits: 1n })
+  const m = route.metadata
+  return JSON.stringify([registry.version, route.id, sourceAsset.id, destinationAsset.id, call.program,
+    call.amountAtomic.toString(), ...call.inputs.slice(0, 6), m?.aleoPrivateTransferCommit,
+    m?.aleoPrivateTransferFeeMapping, m?.aleoPrivateTransferFeeKey, m?.aleoPrivateTransferTokenProgram,
+    m?.aleoPrivateTransferFreezelistProgram, m?.aleoMailboxProgram,
+    m?.aleoPrivateTransferPauseMapping, m?.aleoPrivateTransferPauseKey])
+}
+
 /**
  * Quotes included token fees and both hook payments for a reviewed private outbound transfer.
  * Reads Aleo fee and hook state without requesting a signature. This accounting
- * helper does not enable private execution or alter existing public quotes.
+ * quote requires a separate private execution authorization and leaves public quotes unchanged.
  * @param registry Supplies pinned outbound ABI, fee mapping, router, and hook metadata.
  * @param client Supplies Aleo network access; wallet-services-api is not used.
  * @param params Supplies the original plan whose amount is the gross token record spend.
@@ -179,6 +191,7 @@ export async function quoteAleoHyperlanePrivateTransfer(
   const hookPayments = hooks.map(hook => ({ hook, paymentMicrocredits: payments.get(hook)! }))
   const dispatchCreditsMicrocredits = hookPayments.reduce((sum, payment) => sum + payment.paymentMicrocredits, 0n)
   return { ...planHyperlanePrivateTransferFees({ amountAtomic: call.amountAtomic, feeBps, dispatchCreditsMicrocredits }),
+    transferFingerprint: privateTransferFingerprint(registry, params.plan),
     routeId: route.id, program, amountIn: params.plan.amountIn,
     amountOut: formatDecimalAmount(destinationAmountAtomic, remote), destinationAmountAtomic, hookPayments,
   }

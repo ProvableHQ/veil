@@ -108,6 +108,7 @@ export async function recover(
         protocolState: {
           routeId: checkpoint.route.id,
           preparedTransaction: prepared.serializedTransaction,
+          ...(checkpoint.source?.privateHyperlane ? { sourceFunction: 'transfer_remote_private' } : {}),
           ...deliveryVerification,
         },
       })
@@ -127,7 +128,7 @@ export async function recover(
         protocol: plan.protocol,
         status: 'SOURCE_CONFIRMING',
         sourceTxId: checkpoint.source.transactionId,
-        protocolState: { routeId: checkpoint.route.id, ...deliveryVerification },
+        protocolState: { routeId: checkpoint.route.id, ...(checkpoint.source?.privateHyperlane ? { sourceFunction: 'transfer_remote_private' } : {}), ...deliveryVerification },
       },
       signal: params.signal,
     })
