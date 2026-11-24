@@ -1,3 +1,4 @@
+import { hyperlaneRecipient } from './privateMint.js'
 import { BridgeError } from '../../errors/bridgeErrors.js'
 import type { SolanaClient, SolanaWalletClient } from '../../connections/solana.js'
 import { quoteIgpGasPayment } from '../../solana/igp.js'
@@ -60,6 +61,7 @@ export async function quote(
 ): Promise<SolanaHyperlaneTransferQuote> {
   // Validate every reviewed program and account address before reading Solana;
   // ports must not infer these deployment-specific accounts from token symbols.
+  hyperlaneRecipient(registry, params.plan)
   const metadata = solanaRouteMetadata(registry, params.plan)
   const rpc = client.publicClient
   const amountLamports = parseDecimalAmount(params.plan.amountIn, params.plan.sourceAsset.decimals)
@@ -82,6 +84,7 @@ export async function quote(
     senderAddress: params.plan.sender,
     uniqueMessageAddress: uniqueMessageSigner.address,
     recipientAleoAddress: params.plan.recipient,
+    addressEncoding: params.plan.hyperlane?.addressEncoding,
     amountLamports,
   })
   const { blockhash, lastValidBlockHeight } = await rpc.getLatestBlockhash()
@@ -305,6 +308,7 @@ export async function execute(
   const pollingIntervalMs = Math.max(requestedPollingIntervalMs, 100)
 
   // 1. Validate the route.
+  hyperlaneRecipient(registry, params.plan)
   const metadata = solanaRouteMetadata(registry, params.plan)
 
   // A persisted source receipt represents an already-broadcast transaction.
@@ -414,6 +418,7 @@ export async function execute(
     senderAddress,
     uniqueMessageAddress: uniqueMessageSigner.address,
     recipientAleoAddress: params.plan.recipient,
+    addressEncoding: params.plan.hyperlane?.addressEncoding,
     amountLamports: transferQuote.amountLamports,
   })
   const instruction = {

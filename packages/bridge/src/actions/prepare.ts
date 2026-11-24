@@ -1,3 +1,4 @@
+import { hyperlaneRecipient } from '../protocols/hyperlane/privateMint.js'
 import { BridgeError } from '../errors/bridgeErrors.js'
 import type {
   BridgeExecutionStep,
@@ -123,13 +124,15 @@ export function prepare(
   }
   // xReserve delivery on Aleo can be a public balance, a private record minted
   // by the provider, or a private wrapper mint authorized by the recipient.
-  const mintMode = params.mintMode ?? (params.privateRecipient === true ? 'private' : 'public')
+  const mintMode = params.mintMode ?? (params.privateRecipient === true || params.hyperlane !== undefined ? 'private' : 'public')
   if ((params.mintMode != null || params.privateRecipient === true) && destinationChain.family !== 'aleo') {
     throw new BridgeError('Aleo mint mode is only valid when the destination chain is Aleo')
   }
-  if (route.protocol !== 'xreserve' && mintMode !== 'public') {
-    throw new BridgeError('record and private mint modes are only supported by xReserve routes')
+  if (route.protocol !== 'xreserve' && !(route.protocol === 'hyperlane' && mintMode === 'private') && mintMode !== 'public') {
+    throw new BridgeError('record mint mode is only supported by xReserve routes; private mode also supports reviewed inbound Hyperlane routes')
   }
+
+  if (params.hyperlane !== undefined && route.protocol !== 'hyperlane') throw new BridgeError('Hyperlane options require a Hyperlane route')
 
   if (params.cctp && route.protocol !== 'cctp') throw new BridgeError('CCTP options require a CCTP route')
   if (route.protocol === 'cctp') {
@@ -170,9 +173,13 @@ export function prepare(
         { key: 'destination-confirmation', kind: 'confirm-delivery', chainId: destinationChain.id, executor: 'protocol', description: 'Verify delivery to the recipient; screened funds may enter holding.', irreversible: false },
       ]
     : hyperlaneSteps(sourceAsset, destinationAsset, sourceChain, destinationChain)
+  if (route.protocol === 'hyperlane' && mintMode === 'private') {
+    steps.splice(steps.length - 1, 0, { key: 'destination-claim', kind: 'mint', chainId: destinationChain.id, executor: 'aleo-wallet', description: `Submit claim_private to receive ${destinationAsset.symbol} as a private record.`, irreversible: false })
+  }
   const fees: BridgePlan['fees'] = []
 
-  return {
+  const plan: BridgePlan = {
+    ...(params.hyperlane === undefined ? {} : { hyperlane: { addressEncoding: { ...params.hyperlane.addressEncoding } } }),
     ...(route.protocol === 'cctp' ? { cctp: { speed: params.cctp?.speed ?? 'standard', forwarding: params.cctp?.forwarding ?? true,
       ...(params.cctp?.maxFee !== undefined ? { maxFee: params.cctp.maxFee } : {}) } } : {}),
     registryVersion: registry.version,
@@ -190,4 +197,6 @@ export function prepare(
     fees,
     steps,
   }
+  if (route.protocol === 'hyperlane' && (mintMode !== 'public' || params.hyperlane !== undefined)) hyperlaneRecipient(registry, plan)
+  return plan
 }

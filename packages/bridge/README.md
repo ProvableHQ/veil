@@ -52,6 +52,27 @@ now includes additional chains and routes; filter by protocol or endpoints if
 an application only supports the existing integrations. Filtering limits
 runtime discovery but does not narrow the exported TypeScript unions.
 
+## Private Hyperlane delivery
+
+Opt into commitment-based EVM/Solana-to-Aleo delivery with
+`hyperlane: { addressEncoding: { commitmentHex } }` on a reviewed private route.
+The encoding stays fixed through quoting, execution, and recovery. After
+the warp route's `claimable` mapping shows funds, `complete` submits the recipient-authorized Aleo claim.
+Recovery and bounded counter scans use that mapping without Circle API calls or
+a source transaction/message id.
+The bundled production routes remain public-only until their private claim
+deployments are verified. See [private Hyperlane setup and recovery](docs/hyperlane-private-mint.md)
+and the [example](examples/private-hyperlane.ts).
+
+Private outbound fee accounting is available separately through
+`hyperlane.aleo.quotePrivateTransfer`, which reads the reviewed Aleo fee mapping,
+deducts the included token fee from the gross amount, and sums both private
+dispatch hook payments. Opt into the separate eleven-input execution path with
+`bridge.execute({ plan, hyperlanePrivateTransfer: { quote } })` or
+`hyperlane.aleo.executePrivateTransfer`. Private execution requires explicitly
+reviewed token, proof, mailbox, and pause metadata; existing public transitions
+retain their interfaces. See [private outbound fees](docs/hyperlane-private-mint.md#account-for-private-outbound-transfer-fees).
+
 ## Supported transfers
 
 | Source | Destination | Asset received | Provider |
@@ -629,7 +650,7 @@ move between that public balance and a private Aleo record.
 
 ### Unshield before bridging out through Hyperlane
 
-An outbound Hyperlane transfer cannot spend a private record directly. Convert
+The default outbound Hyperlane path spends public tokens. To retain that flow, convert
 the amount into the account's public balance before quoting and executing the
 bridge transfer.
 
@@ -867,3 +888,8 @@ reviewed `asset.privacy.freezelistProgram` in the injected registry before using
 automatic, annotated, provider, or wallet-derived proofs. Neither token nor
 wrapper names are used to infer a list. The same registry MUST be supplied to
 the helpers and bridge client.
+
+Private Hyperlane outbound calls can instead spend a token and dispatch credits
+record directly, with a signer proof and the freshly validated token fee. See
+[private outbound execution and recovery](docs/hyperlane-private-mint.md#execute-a-private-outbound-transfer)
+for reviewed metadata, wallet grants, local selection, and safe retries.

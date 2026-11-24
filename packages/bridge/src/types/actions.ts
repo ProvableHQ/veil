@@ -1,3 +1,5 @@
+import type { HyperlanePrivateTransferOptions } from './hyperlanePrivateTransfer.js'
+import type { HyperlaneClaimOptions } from './hyperlane.js'
 import type { EvmCctpTransferQuote, EvmCctpTransferExecution } from './cctp.js'
 import type { ProvingProgressHandler, TransactionInput } from '@provablehq/veil-core'
 import type { ComplianceProofs } from './compliance.js'
@@ -187,6 +189,7 @@ export type BridgeQuote = BridgeQuotePricing & { paused: boolean; routeStatus: B
  * Current fees and approval requirements are recalculated before funds are
  * committed, so a previously displayed quote is not treated as final.
  *
+ * @property hyperlanePrivateTransfer Optional separate private Aleo outbound authorization with an approved private quote and record funding. Omit to retain public Hyperlane execution.
  * @property plan Route, assets, amount, and recipient selected for the transfer.
  * @property pollingIntervalMs Delay between source confirmation checks. Defaults to 1,000 milliseconds where polling applies.
  * @property confirmationTimeoutMs Maximum source confirmation wait. Defaults to 120,000 milliseconds where polling applies.
@@ -202,6 +205,7 @@ export type BridgeQuote = BridgeQuotePricing & { paused: boolean; routeStatus: B
  * @property skipRouteStatus Skips the on-chain pause reads that otherwise run before any wallet interaction. Defaults to false. Set it when the caller already checked `getRouteStatus`; the chain still enforces the pause.
  */
 export type ExecuteParameters = {
+  hyperlanePrivateTransfer?: HyperlanePrivateTransferOptions | undefined
   plan: BridgePlan
   skipRouteStatus?: boolean | undefined
   circle?: ExecuteCircleOptions | undefined
@@ -253,8 +257,9 @@ export type GetStatusParameters = {
 }
 
 /**
- * Controls the destination wallet transaction for xReserve private delivery or CCTP minting.
+ * Controls the destination wallet transaction for private delivery or CCTP minting.
  *
+ * @property hyperlane Optional Hyperlane claim scalar and recipient proof. Omission requests wallet fulfillment.
  * @property circle Circle-specific options: the CCTP manual-mint override, or the identity store, wallet preparation and nonce input, or legacy secret nonce for a private xReserve mint.
  * @property cctp Manual-mint override for an attested, unused CCTP message when forwarding stalls.
  * @property privateMintSecretNonce Legacy caller-managed secret Aleo scalar for a private xReserve mint.
@@ -263,6 +268,7 @@ export type GetStatusParameters = {
  * @property onProgress Optional awaited callback for Aleo proving and submission boundaries.
  */
 type CompleteOptions = {
+  hyperlane?: HyperlaneClaimOptions | undefined
   skipRouteStatus?: boolean | undefined
   circle?: CompleteCircleOptions | undefined
   /** @deprecated Use `circle.manualMint`. Removed in the next major release. */
@@ -285,6 +291,7 @@ type CompleteOptions = {
  * @property progress Recovered progress whose next operation is `complete`, or `wait` when manually minting CCTP.
  * @property plan Route, assets, amount, and recipient retained while the application stayed open.
  * @property receipt Circle-attested transfer state retained while the application stayed open.
+ * @property hyperlane Optional Hyperlane claim scalar and recipient proof. Omission requests wallet fulfillment.
  * @property circle Circle-specific options: the CCTP manual-mint override, or the identity store, wallet preparation and nonce input, or legacy secret nonce for a private xReserve mint.
  * @property cctp Manual-mint override for an attested, unused CCTP message when forwarding stalls.
  * @property privateMintSecretNonce Legacy caller-managed secret Aleo scalar for a private xReserve mint.

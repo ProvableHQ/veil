@@ -220,9 +220,36 @@ export {
   type ReadXReserveDeliveryParameters,
 } from './utils/xreserveDelivery.js'
 
-export { BridgeError, BridgeRoutePausedError } from './errors/bridgeErrors.js'
+export { BridgeError, BridgeRoutePausedError, PrivateHyperlaneSubmissionError } from './errors/bridgeErrors.js'
 export { formatDecimalAmount, parseDecimalAmount } from './utils/units.js'
 
 export type { EvmCctpTransferQuote, EvmCctpTransferExecution } from './types/cctp.js'
 
 export type { VerulinkQuote, VerulinkExecution } from './types/verulink.js'
+
+export type { HyperlaneAddressEncoding, HyperlaneOptions, HyperlaneClaimOptions, ReadHyperlaneClaimableAmountParameters, ScanHyperlaneAddressEncodingsParameters, HyperlaneAddressEncodingEntry, HyperlaneAddressEncodingScanResult } from './types/hyperlane.js'
+export { hyperlanePrivateClaimGrants, readHyperlaneClaimableAmount, scanHyperlaneAddressEncodings } from './protocols/hyperlane/privateMint.js'
+export { hyperlaneCommitmentToLimbs } from './utils/hyperlane.js'
+
+export {
+  calculateHyperlanePrivateTransferAmount,
+  readHyperlanePrivateTransferFeeBps,
+  planHyperlanePrivateTransferFees,
+  quoteAleoHyperlanePrivateTransfer,
+} from './protocols/hyperlane/privateTransferFees.js'
+export type {
+  HyperlanePrivateTransferAmount,
+  HyperlanePrivateTransferFees,
+  QuoteAleoHyperlanePrivateTransferParameters,
+  AleoHyperlanePrivateTransferQuote,
+} from './types/hyperlanePrivateTransfer.js'
+
+export { buildAleoHyperlanePrivateTransferCall, hyperlanePrivateTransferGrants } from './protocols/hyperlane/privateTransferCall.js'
+export { executeAleoHyperlanePrivateTransfer } from './protocols/hyperlane/privateTransfer.js'
+export type {
+  HyperlanePrivateTransferOptions,
+  BuildAleoHyperlanePrivateTransferParameters,
+  AleoHyperlanePrivateTransferCall,
+  ExecuteAleoHyperlanePrivateTransferParameters,
+  AleoHyperlanePrivateTransferExecution,
+} from './types/hyperlanePrivateTransfer.js'

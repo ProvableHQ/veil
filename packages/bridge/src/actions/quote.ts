@@ -12,10 +12,10 @@ import {
 import type { BridgePlan, BridgeRegistry } from '../types/protocol.js'
 import type { QuoteParameters, BridgeQuote, BridgeQuotePricing } from '../types/actions.js'
 import { getRouteStatus } from './getRouteStatus.js'
-import { aleoAddressToBytes32 } from '../utils/xreserve.js'
 import * as aleoHyperlane from '../protocols/hyperlane/aleo.js'
 import * as evmHyperlane from '../protocols/hyperlane/evm.js'
 import * as solanaHyperlane from '../protocols/hyperlane/solana.js'
+import { assertUnusedPrivateMintEncoding, hyperlaneRecipient } from '../protocols/hyperlane/privateMint.js'
 import * as evmToAleoXReserve from '../protocols/xreserve/evmToAleo.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 import { formatDecimalAmount, parseDecimalAmount } from '../utils/units.js'
@@ -55,6 +55,7 @@ export async function quote(
   const transferId = createTransferId()
   const prepared = { ...prepare(registry, params), ...(transferId ? { transferId } : {}) }
   clients = withBridgeContext(clients, 'quote', planSubject(prepared))
+  await assertUnusedPrivateMintEncoding(registry, clients, prepared)
   // Pause flags are read alongside the price so a halted route is reported
   // with the quote rather than discovered at execution.
   const [routeStatus, priced] = await Promise.all([
@@ -110,7 +111,7 @@ async function quoteRoute(
     const client = requireEvmClient(registry, clients, chainId)
     const quote = await evmHyperlane.quote(registry, client, {
       plan,
-      recipientBytes32: aleoAddressToBytes32(plan.recipient),
+      recipientBytes32: hyperlaneRecipient(registry, plan),
     })
     return { kind: 'evm-hyperlane', plan, ...quote }
   }

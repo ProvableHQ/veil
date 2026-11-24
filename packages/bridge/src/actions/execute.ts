@@ -12,10 +12,11 @@ import {
 import type { XReserveBurnMode } from '../types/aleo.js'
 import type { BridgeReceipt, BridgeRegistry } from '../types/protocol.js'
 import type { ExecuteParameters, BridgeExecution } from '../types/actions.js'
-import { aleoAddressToBytes32 } from '../utils/xreserve.js'
 import * as aleoHyperlane from '../protocols/hyperlane/aleo.js'
 import * as evmHyperlane from '../protocols/hyperlane/evm.js'
 import * as solanaHyperlane from '../protocols/hyperlane/solana.js'
+import { executeAleoHyperlanePrivateTransfer } from '../protocols/hyperlane/privateTransfer.js'
+import { assertUnusedPrivateMintEncoding, hyperlaneRecipient } from '../protocols/hyperlane/privateMint.js'
 import * as aleoToEvmXReserve from '../protocols/xreserve/aleoToEvm.js'
 import * as evmToAleoXReserve from '../protocols/xreserve/evmToAleo.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
@@ -113,6 +114,15 @@ export async function execute(
   fetcher: typeof fetch = globalThis.fetch,
 ): Promise<BridgeExecution> {
   clients = withBridgeContext(clients, 'execute', planSubject(params.plan))
+  if (params.hyperlanePrivateTransfer !== undefined) {
+    if (params.mode !== undefined && params.mode !== 'private') throw new BridgeError('Private Hyperlane execution conflicts with the selected public mode')
+    if (params.gasPaymentMicrocredits !== undefined) throw new BridgeError('Private Hyperlane hook payments come from its approved private quote')
+    return { kind: 'aleo-hyperlane', ...await executeAleoHyperlanePrivateTransfer(registry, clients, {
+      ...params.hyperlanePrivateTransfer, plan: params.plan, privateFee: params.privateFee,
+      skipRouteStatus: params.skipRouteStatus, onCheckpoint: params.onCheckpoint, onProgress: params.onProgress,
+    }) }
+  }
+
   // Refuse a halted route before any wallet interaction so a pause costs the
   // caller no proving time or fees.
   if (!params.skipRouteStatus) await assertRouteNotPaused(registry, clients, params.plan.route.id)
@@ -120,6 +130,7 @@ export async function execute(
   // protocol implementation and wallet capability may commit the funds.
   if (params.plan.protocol === 'cctp') return cctp.execute(registry, clients, fetcher, params)
   if (params.plan.protocol === 'verulink') return executeVerulink(registry, clients, params)
+  await assertUnusedPrivateMintEncoding(registry, clients, params.plan)
   const chain = resolveTransferRoute(registry, params.plan).sourceChain
   const chainId = chain.id
   const onSubmitted = submissionCheckpoint(params)
@@ -130,7 +141,7 @@ export async function execute(
       requireEvmClientWithWallet(registry, clients, chainId, 'execute Hyperlane transfer'),
       {
         plan: params.plan,
-        recipientBytes32: aleoAddressToBytes32(params.plan.recipient),
+        recipientBytes32: hyperlaneRecipient(registry, params.plan),
         pollingIntervalMs: params.pollingIntervalMs,
         confirmationTimeoutMs: params.confirmationTimeoutMs,
         onSubmitted,

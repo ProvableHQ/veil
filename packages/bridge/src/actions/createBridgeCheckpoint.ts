@@ -67,6 +67,7 @@ export function createBridgeCheckpoint(
   // transactions, or the irreversible source transaction identifier.
   const source = approvals.length > 0 || receipt.sourceTxId || preparedTransaction
     ? {
+        ...(plan.protocol === 'hyperlane' && receipt.protocolState.sourceFunction === 'transfer_remote_private' ? { privateHyperlane: true as const } : {}),
         ...(approvals.length > 0 ? { approvalTransactionIds: approvals } : {}),
         ...(Array.isArray(replaced) && replaced.length ? { replacedApprovalTransactionIds: [...replaced] as string[] } : {}),
         ...(receipt.sourceTxId ? { transactionId: receipt.sourceTxId } : {}),
@@ -96,6 +97,7 @@ export function createBridgeCheckpoint(
   return {
     version: 1,
     intent: {
+      ...(plan.hyperlane ? { hyperlane: { addressEncoding: { commitmentHex: plan.hyperlane.addressEncoding.commitmentHex } } } : {}),
       ...(plan.cctp ? { cctp: { ...plan.cctp } } : {}),
       source: { chain: plan.sourceAsset.chainId, asset: plan.sourceAsset.key },
       destination: { chain: plan.destinationAsset.chainId, asset: plan.destinationAsset.key },

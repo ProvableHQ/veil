@@ -9,9 +9,14 @@ routes. Every transfer follows the same lifecycle:
 4. Wait for destination delivery.
 5. Resume or complete a transfer only when the returned progress requests it.
 
-The scripts in this directory run against mainnet. Their default transfer
+The route scripts below run against mainnet. Their default transfer
 amounts are listed below, and they remain read-only unless `EXECUTE_BRIDGE`
 contains the exact acknowledgement shown below.
+
+For Sepolia ETH ↔ Aleo testnet **private minting and private withdrawal**, follow
+the [complete testnet ETH example](./testnet-eth.md). It includes its own reviewed
+testnet registry, local signing clients, saved claim identity, and recovery
+commands. It uses a separate testnet execution acknowledgement.
 
 For Privy or Dynamic server wallets, start with the
 [server-wallet configuration guide](./remote-wallets/README.md). Its examples
@@ -684,3 +689,22 @@ an interruption. Do not delete submission-attempt markers to force a retry.
 A stale lock requires checking that the original process has stopped first.
 The second leg uses the first leg's verified net amount, and completes only
 after an accepted public ALEO transfer to the original account.
+
+## Private Hyperlane delivery
+
+[`private-hyperlane.ts`](./private-hyperlane.ts) accepts an injected bridge client
+with a reviewed private-claim route and a wallet-issued address encoding. It
+quotes by default; explicit execution follows message delivery, submits the
+private claim, and verifies acceptance. See [deployment requirements and wallet grants](../docs/hyperlane-private-mint.md).
+
+The same example exposes `recoverPrivateHyperlaneExample` for read-only recovery
+from the Aleo `claimable` mapping, including when source transaction/message ids
+are unavailable. The guide also demonstrates bounded discovery of existing
+address encodings by counter without Circle API requests.
+
+`quotePrivateHyperlaneOutboundExample` reads a reviewed private outbound fee
+mapping, reports gross token funding and net destination tokens, and sums both
+private dispatch hook payments. It is read-only. `runPrivateHyperlaneOutboundExample` adds explicit private
+execution and net delivery tracking while the existing public outbound examples
+retain their behavior. Local records and proved transactions use checkpoint
+recovery; wallet records remain selected privately in the wallet.

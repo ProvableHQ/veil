@@ -1,3 +1,4 @@
+import { hyperlaneRecipient } from './privateMint.js'
 import { isRegistryVersionCompatible } from '../../registry/compatibility.js'
 import {
   decodeEventLog,
@@ -236,6 +237,9 @@ export async function quote(
   params: QuoteEvmHyperlaneTransferParameters,
 ): Promise<EvmHyperlaneTransferQuote> {
   validateRecipient(params.recipientBytes32)
+  if (params.plan.mintMode !== 'public' || params.plan.hyperlane !== undefined) {
+    if (hyperlaneRecipient(registry, params.plan) !== params.recipientBytes32) throw new BridgeError('Hyperlane recipient bytes do not match the private commitment')
+  }
   const metadata = routeMetadata(registry, params.plan)
   await assertChain(client, metadata.sourceChainId)
   const sourceAsset = registry.assets.find((asset) => asset.id === params.plan.sourceAsset.id)!
@@ -618,6 +622,9 @@ export async function execute(
     throw new BridgeError('confirmationTimeoutMs must be a non-negative finite number')
   }
 
+  if (params.plan.mintMode !== 'public' || params.plan.hyperlane !== undefined) {
+    if (hyperlaneRecipient(registry, params.plan) !== params.recipientBytes32) throw new BridgeError('Hyperlane recipient bytes do not match the private commitment')
+  }
   const metadata = routeMetadata(registry, params.plan)
   await assertChain(client, metadata.sourceChainId)
   let approvalTxIds: Hash[] = []
