@@ -150,10 +150,18 @@ BRIDGE_STATE_FILE=.veil/testnet-eth-withdraw.json pnpm exec tsx packages/bridge/
 `resume` requires the execution acknowledgement and broadcasts the saved
 prepared transaction through `bridge.resume`. It does not select new records or
 rebuild the withdrawal. If a submission was attempted without a saved id, or a
-claim submission outcome is unknown, inspect chain/account history before
+claim submission outcome is unknown without saved proved bytes, inspect chain/account history before
 retrying; the script refuses another submission. If the CLI is forcibly killed,
 remove its `.lock` file only after confirming no process still uses the state.
 A leftover `.tmp` file likewise requires inspection before removal.
+
+Local claim checkpoints keep the encrypted proved bytes after broadcast until
+the transaction is accepted or rejected. If a broadcast claim disappears from
+the node, `claim` rebroadcasts those exact bytes without a new secret or proof.
+Private withdrawal hook fees must match the reviewed quote exactly, even after
+a downward oracle update. A changed quote can stop local proving or prevent
+resumption; review a new attempt only after establishing that the old one was
+never broadcast.
 
 For a **new** transfer, choose a new `BRIDGE_STATE_FILE`. Do not delete an
 unresolved transfer's state or reuse a funded commitment to start another mint.

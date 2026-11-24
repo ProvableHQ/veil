@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { prepare } from '../../src/actions/prepare.js'
 import { quote } from '../../src/actions/quote.js'
+import { execute } from '../../src/actions/execute.js'
 import { complete } from '../../src/actions/complete.js'
 import { getStatus } from '../../src/actions/getStatus.js'
 import { recover } from '../../src/actions/recover.js'
@@ -87,6 +88,22 @@ describe('Hyperlane private delivery', () => {
       { algorithm: 'hyperlane-claim-secret', program: 'test_hyp_warp_token_eth_v2.aleo', function: 'claim_private', inputPosition: 3 },
       { algorithm: 'program-freezelist-exclusion-proof', program: 'test_hyp_warp_token_eth_v2.aleo', function: 'claim_private', inputPosition: 4, argConstraints: { freezelistProgram: ['shield_arc22_freezelist.aleo'] } },
     ])
+  })
+
+  it.each(['0u128', '1u128', '100u128'])('rejects reused encoding balance %s before fresh quote or execution', async balance => {
+    const { clients, executeTransaction } = fixture({ balance })
+    await expect(quote(registry, clients, intent)).rejects.toThrow(/already used/)
+    await expect(execute(registry, clients, { plan, skipRouteStatus: true })).rejects.toThrow(/already used/)
+    expect(executeTransaction).not.toHaveBeenCalled()
+  })
+
+  it('requires destination reads for a fresh private quote and propagates mapping failures', async () => {
+    await expect(quote(registry, {}, intent)).rejects.toThrow(/client/i)
+    const { clients, request, executeTransaction } = fixture()
+    request.mockRejectedValue(new Error('Destination RPC unavailable'))
+    await expect(quote(registry, clients, intent)).rejects.toThrow('Destination RPC unavailable')
+    await expect(execute(registry, clients, { plan, skipRouteStatus: true })).rejects.toThrow('Destination RPC unavailable')
+    expect(executeTransaction).not.toHaveBeenCalled()
   })
 
   it('stops at claim authorization after delivery instead of reporting completed', async () => {

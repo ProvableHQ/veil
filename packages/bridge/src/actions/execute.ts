@@ -1,5 +1,3 @@
-import { executeAleoHyperlanePrivateTransfer } from '../protocols/hyperlane/privateTransfer.js'
-import { hyperlaneRecipient } from '../protocols/hyperlane/privateMint.js'
 import { planSubject, withBridgeContext } from './internal/clientContext.js'
 import * as cctp from '../protocols/cctp/evm.js'
 import { execute as executeVerulink } from '../protocols/verulink/source.js'
@@ -17,6 +15,8 @@ import type { ExecuteParameters, BridgeExecution } from '../types/actions.js'
 import * as aleoHyperlane from '../protocols/hyperlane/aleo.js'
 import * as evmHyperlane from '../protocols/hyperlane/evm.js'
 import * as solanaHyperlane from '../protocols/hyperlane/solana.js'
+import { executeAleoHyperlanePrivateTransfer } from '../protocols/hyperlane/privateTransfer.js'
+import { assertUnusedPrivateMintEncoding, hyperlaneRecipient } from '../protocols/hyperlane/privateMint.js'
 import * as aleoToEvmXReserve from '../protocols/xreserve/aleoToEvm.js'
 import * as evmToAleoXReserve from '../protocols/xreserve/evmToAleo.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
@@ -130,6 +130,7 @@ export async function execute(
   // protocol implementation and wallet capability may commit the funds.
   if (params.plan.protocol === 'cctp') return cctp.execute(registry, clients, fetcher, params)
   if (params.plan.protocol === 'verulink') return executeVerulink(registry, clients, params)
+  await assertUnusedPrivateMintEncoding(registry, clients, params.plan)
   const chain = resolveTransferRoute(registry, params.plan).sourceChain
   const chainId = chain.id
   const onSubmitted = submissionCheckpoint(params)

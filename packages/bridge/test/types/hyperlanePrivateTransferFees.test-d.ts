@@ -15,6 +15,7 @@ test('preserves bigint amounts and nullable execution fee budgets', () => {
   expectTypeOf<ReturnType<typeof planHyperlanePrivateTransferFees>>().toEqualTypeOf<HyperlanePrivateTransferFees>()
   expectTypeOf<AleoHyperlanePrivateTransferQuote['destinationAmountAtomic']>().toEqualTypeOf<bigint>()
   expectTypeOf<AleoHyperlanePrivateTransferQuote['executionFeeMicrocredits']>().toEqualTypeOf<bigint | null>()
+  expectTypeOf<AleoHyperlanePrivateTransferQuote['transferFingerprint']>().toEqualTypeOf<string>()
 })
 
 test('keeps private execution additive to existing public calls', () => {

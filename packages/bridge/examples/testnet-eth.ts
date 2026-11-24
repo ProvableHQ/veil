@@ -184,16 +184,22 @@ export async function runTestnetEthExample(action: Action, options: TestnetEthEx
     }
     if (progress.next === 'complete') {
       if (!execute) { console.log('Private claim is funded. Run claim with the execution acknowledgement.'); return }
-      if (saved.claimAttempted) throw new Error('Prior claim submission outcome unknown; inspect Aleo history before authorizing another claim')
-      if (!saved.secretNonce) throw new Error('The original local claim secret is missing; retain the state file')
+      const preparedClaim = progress.receipt.protocolState.preparedDestinationTransaction !== undefined
+      if (saved.claimAttempted && !preparedClaim) throw new Error('Prior claim submission outcome unknown; inspect Aleo history before authorizing another claim')
       await checkClaimPause()
-      const root = await publicClient.readContract({ programId: FREEZELIST, mapping: 'freeze_list_root', key: '1u8' })
-      if (!root) throw new Error('Missing freezelist root')
-      const tree = root === EMPTY_ROOT ? [] : await publicClient.getComplianceFreezeList({ programId: FREEZELIST })
-      // Verify the exclusion witness against the current root before proving.
-      const merkleProof = await sdk.generateFreezelistProof({ address: account.address, tree, root })
+      let localClaim: { secretNonce: string; merkleProof: string } | undefined
+      if (!preparedClaim) {
+        if (!saved.secretNonce) throw new Error('The original local claim secret is missing; retain the state file')
+        const root = await publicClient.readContract({ programId: FREEZELIST, mapping: 'freeze_list_root', key: '1u8' })
+        if (!root) throw new Error('Missing freezelist root')
+        const tree = root === EMPTY_ROOT ? [] : await publicClient.getComplianceFreezeList({ programId: FREEZELIST })
+        // A fresh claim needs a current witness. A recovered claim rebroadcasts
+        // its saved encrypted bytes without generating another secret or proof.
+        const merkleProof = await sdk.generateFreezelistProof({ address: account.address, tree, root })
+        localClaim = { secretNonce: saved.secretNonce, merkleProof }
+      }
       saved.claimAttempted = true; save()
-      const result = await bridge.complete({ progress, hyperlane: { secretNonce: saved.secretNonce, merkleProof },
+      const result = await bridge.complete({ progress, ...(localClaim ? { hyperlane: localClaim } : {}),
         onCheckpoint(checkpoint) { saved.claimAttempted = false; persist(checkpoint) },
       })
       progress = await wait({ next: 'wait', plan: progress.plan, receipt: result.receipt })

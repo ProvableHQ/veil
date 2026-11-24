@@ -50,7 +50,7 @@ export type QuoteAleoHyperlanePrivateTransferParameters = { plan: BridgePlan }
  * @property hookPayments Contains each effective and required hook invocation in order, including duplicates.
  * @property hookPayments.hook Identifies the hook receiving this payment.
  * @property hookPayments.paymentMicrocredits Contains the hook's current credits requirement (u64).
- * @property transferFingerprint Binds the quote to its intent and reviewed deployment. Omitted by older quote producers; execution requires a fresh SDK quote containing it.
+ * @property transferFingerprint Binds the SDK quote to its intent and reviewed deployment; required before execution.
  * @example const quote: AleoHyperlanePrivateTransferQuote = await hyperlane.aleo.quotePrivateTransfer(client, { registry, plan })
  */
 export type AleoHyperlanePrivateTransferQuote = HyperlanePrivateTransferFees & {
@@ -60,7 +60,7 @@ export type AleoHyperlanePrivateTransferQuote = HyperlanePrivateTransferFees & {
   amountOut: string
   destinationAmountAtomic: bigint
   hookPayments: readonly { hook: string; paymentMicrocredits: bigint }[]
-  transferFingerprint?: string | undefined
+  transferFingerprint: string
 }
 
 /**

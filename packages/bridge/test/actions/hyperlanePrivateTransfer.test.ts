@@ -48,12 +48,12 @@ async function fixture(options: { local?: boolean; privateFee?: boolean } = {}) 
   } : route) }
   const plan = prepare(registry, { source: { chain: 'aleo', asset: 'eth' }, destination: { chain: 'ethereum', asset: 'eth' }, amount: '1', recipient: '0x0000000000000000000000000000000000000001' })
   const base = buildAleoHyperlaneTransferRemoteCall(registry, { plan, gasPaymentMicrocredits: 1n })
-  const state = { rate: '25u16', pause: '[false, false]', app: base.inputs[0], router: base.inputs[2], mailbox: base.inputs[1], balance: 100n, confirmed: 'accepted' }
+  const state = { rate: '25u16', gasPrice: '1000000000', pause: '[false, false]', app: base.inputs[0], router: base.inputs[2], mailbox: base.inputs[1], balance: 100n, confirmed: 'accepted' }
   const request = vi.fn(async ({ method, params }: { method: string; params: Record<string, unknown> }): Promise<unknown> => {
     if (method === 'getMappingValue') {
       if (params.mapping === 'private_transfer_fee_bps__') return state.rate
       if (params.mapping === 'hooks') return params.key === registry.routes.find(r => r.id === ROUTE)!.metadata!.aleoMailboxRequiredHook ? '3u8' : '4u8'
-      if (params.mapping === 'destination_gas_configs') return '{ gas_overhead: 159337u128, exchange_rate: 402u128, gas_price: 1000000000u128 }'
+      if (params.mapping === 'destination_gas_configs') return `{ gas_overhead: 159337u128, exchange_rate: 402u128, gas_price: ${state.gasPrice}u128 }`
       if (params.mapping === 'app_metadata') return state.app
       if (params.mapping === 'remote_routers') return state.router
       if (params.mapping === 'mailbox') return state.mailbox
@@ -118,7 +118,7 @@ describe('private outbound Hyperlane execution', () => {
     if (invalid === 'recipient') plan.recipient = '0x0000000000000000000000000000000000000002'
     if (invalid === 'amount') plan.amountIn = '2'
     if (invalid === 'token-fee') quote.protocolFeeAtomic++
-    if (invalid === 'fingerprint') quote.transferFingerprint = undefined
+    if (invalid === 'fingerprint') delete (quote as Partial<typeof quote>).transferFingerprint
     if (invalid === 'hooks') quote.hookPayments[0]!.paymentMicrocredits++
     await expect(hyperlane.aleo.executePrivateTransfer(f.clients, { registry: f.registry, plan, quote, skipRouteStatus: true })).rejects.toThrow(/quote|intent/)
     expect(f.executeTransaction).not.toHaveBeenCalled()
@@ -139,6 +139,15 @@ describe('private outbound Hyperlane execution', () => {
     const f = await fixture({ local: true })
     await expect(hyperlane.aleo.executePrivateTransfer(f.clients, { registry: f.registry, plan: f.plan, quote: f.quote, ...localFunding, skipRouteStatus: true,
       onProgress: event => { if (event.type === 'request-built') f.state.rate = '26u16' },
+    })).rejects.toThrow(/fees changed/)
+    expect(f.broadcast).not.toHaveBeenCalled()
+  })
+
+  it.each(['500000000', '2000000000'])('requires a fresh authorization after a hook oracle change to %s', async gasPrice => {
+    const f = await fixture({ local: true })
+    await expect(hyperlane.aleo.executePrivateTransfer(f.clients, {
+      registry: f.registry, plan: f.plan, quote: f.quote, ...localFunding, skipRouteStatus: true,
+      onProgress: event => { if (event.type === 'request-built') f.state.gasPrice = gasPrice },
     })).rejects.toThrow(/fees changed/)
     expect(f.broadcast).not.toHaveBeenCalled()
   })
@@ -223,6 +232,25 @@ describe('private outbound Hyperlane execution', () => {
     await expect(hyperlane.aleo.executePrivateTransfer(f.clients, { registry: f.registry, plan: f.plan, quote: f.quote, ...localFunding, privateFee: true, feeRecord: DISPATCH, skipRouteStatus: true })).rejects.toThrow(/distinct/)
     await hyperlane.aleo.executePrivateTransfer(f.clients, { registry: f.registry, plan: f.plan, quote: f.quote, ...localFunding, privateFee: true, feeRecord: FEE, skipRouteStatus: true })
     expect(f.executeTransaction.mock.calls[0]![0].feeRecord).toBe(FEE)
+  })
+
+  it('excludes the explicit execution fee record from automatic dispatch selection', async () => {
+    const f = await fixture({ local: true, privateFee: true })
+    const feeRecord = record('microcredits', 10_000_000n, 3)
+    vi.mocked(getRecordInventory).mockResolvedValue({
+      available: [
+        { id: '3group', amount: 10_000_000n, record: { recordPlaintext: feeRecord } },
+        { id: '2group', amount: 20_000_000n, record: { recordPlaintext: DISPATCH } },
+      ],
+    } as never)
+    await hyperlane.aleo.executePrivateTransfer(f.clients, {
+      registry: f.registry, plan: f.plan, quote: f.quote,
+      recordClient: { ...f.publicClient, account: f.wallet.account } as Client,
+      tokenRecord: TOKEN, merkleProof: PROOF, privateFee: true, feeRecord, skipRouteStatus: true,
+    })
+    const submitted = f.executeTransaction.mock.calls[0]![0]
+    expect(submitted.feeRecord).toBe(feeRecord)
+    expect(submitted.inputs.slice(0, 2)).toEqual([TOKEN, DISPATCH])
   })
 
   it('rejects a private execution fee record that is too small for the proved fee', async () => {

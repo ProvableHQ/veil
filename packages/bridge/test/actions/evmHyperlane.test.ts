@@ -495,7 +495,11 @@ describe('private EVM Hyperlane wire and recovery', () => {
   it('reuses the commitment verbatim through quote, dispatch, checkpoint, and recovery', async () => {
     const registry = withPrivateMint(DEFAULT_BRIDGE_REGISTRY, 'hyperlane:ethereum/eth->aleo/eth')
     const { bridgeExecutor, sent } = executor({ amount: 100n, nativeValue: 101n })
-    const quoted = await quote(registry, { ethereum: bridgeExecutor }, {
+    const clients = {
+      ethereum: bridgeExecutor,
+      aleo: { family: 'aleo' as const, publicClient: { request: async () => null } as never },
+    }
+    const quoted = await quote(registry, clients, {
       source: { chain: 'ethereum', asset: 'eth' }, destination: { chain: 'aleo', asset: 'eth' },
       amount: '0.0000000000000001', recipient: ALEO_RECIPIENT,
       hyperlane: { addressEncoding: { commitmentHex: COMMITMENT_HEX } },
@@ -504,7 +508,7 @@ describe('private EVM Hyperlane wire and recovery', () => {
     if (quoted.kind !== 'evm-hyperlane') throw new Error('Expected EVM Hyperlane')
     expect(quoted.recipientBytes32).toBe(`0x${COMMITMENT_HEX}`)
     expect(quoted.plan.steps).toContainEqual(expect.objectContaining({ key: 'destination-claim', executor: 'aleo-wallet' }))
-    const execution = await execute(registry, { ethereum: bridgeExecutor }, { plan: quoted.plan, skipRouteStatus: true })
+    const execution = await execute(registry, clients, { plan: quoted.plan, skipRouteStatus: true })
     const decoded = decodeFunctionData({ abi: ABI, data: sent[0]!.data })
     expect(decoded.args).toEqual([1634493807, `0x${COMMITMENT_HEX}`, 100n])
     const checkpoint = createBridgeCheckpoint(quoted.plan, execution.receipt)
@@ -542,7 +546,10 @@ it('resumes a private token approval with the same commitment and no duplicate a
     amount: '0.001', recipient: ALEO_RECIPIENT,
     hyperlane: { addressEncoding: { commitmentHex: COMMITMENT_HEX } },
   })
-  const execution = await execute(registry, { ethereum: bridgeExecutor }, { plan: privatePlan, skipRouteStatus: true, confirmationTimeoutMs: 0 })
+  const execution = await execute(registry, {
+    ethereum: bridgeExecutor,
+    aleo: { family: 'aleo', publicClient: { request: async () => null } as never },
+  }, { plan: privatePlan, skipRouteStatus: true, confirmationTimeoutMs: 0 })
   expect(execution.receipt.status).toBe('SOURCE_APPROVAL_PENDING')
   options.receipt = 'confirmed'
   options.allowance = 100_000n

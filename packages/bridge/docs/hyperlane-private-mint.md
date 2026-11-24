@@ -68,6 +68,15 @@ The example endpoints require an injected reviewed route. Supplying
 An explicit public or record mode conflicts with the encoding. Private mode
 without an encoding is rejected before quoting reads a chain.
 
+`bridge.quote` requires destination Aleo read access for private inbound plans.
+It rejects any existing `claimable` entry for the encoding, including a zero
+balance, before source pricing. `bridge.execute` repeats this check before a
+fresh source submission, so an encoding used after quoting cannot fund another
+deposit. `prepare` remains an offline metadata check. A fresh wallet issuance
+is still required: an absent mapping cannot detect an earlier deposit that has
+not reached Aleo yet. Recover existing transfers with their saved checkpoint;
+do not quote them again or reuse their encoding for a new deposit.
+
 `hyperlanePrivateClaimGrants({ registry, plan: quote.plan })` returns the exact
 secret and proof grants to include when connecting the issuing Aleo wallet.
 Existing USDCx grants do not authorize these claim inputs. Grants authorize
@@ -116,11 +125,16 @@ A checkpoint containing only the original intent and reviewed route can recover
 a funded private claim. Source clients and Circle's attestation API are not
 required for this path. Prepared and submitted destination claim ids are checked
 first, so an accepted claim completes recovery even when `claimable` is zero.
-Pending claims remain under observation. When a prepared claim is not found,
+Encrypted proved claim bytes remain in prepared and submitted checkpoints until
+the claim is accepted or rejected. Pending claims remain under observation.
+When a prepared or previously broadcast claim is not found,
 `complete` can rebroadcast its exact saved bytes without a wallet or another
 proof. Unknown submissions without saved bytes never authorize another claim.
 If a callback fails after submission, `PrivateHyperlaneSubmissionError.checkpoint`
-preserves the submitted claim id for recovery.
+preserves the submitted claim id and available proved bytes for recovery. If
+the wallet reports a conflicting id, the error retains the canonical prepared
+transaction and reports the conflicting id in
+`receipt.protocolState.reportedDestinationTxId`; inspect both ids before retrying.
 
 A present zero balance retains the encoding as recovery evidence and prevents
 source resubmission. `resume` also rereads the mapping when a destination client
@@ -130,6 +144,10 @@ is absent and source clients and saved transactions are available, recovery can
 still observe or resume the existing source approval flow. Source approvals
 reuse the same commitment. The application remains responsible for wallet
 identity backup and durable checkpoint storage.
+
+During source-stage polling, a configured destination client also checks
+`claimable` so delivery can be recovered without source history. Destination
+RPC errors propagate from that poll; retry observation with the same checkpoint.
 
 See [the executable example](../examples/private-hyperlane.ts). It quotes by
 default and requires `execute: true` to move funds.
@@ -271,6 +289,16 @@ input 9. The inbound claim's secret at input 3 is unrelated to this outbound
 call. Existing public transfer builders retain their seven-input interfaces. Use
 `buildAleoHyperlanePrivateTransferCall` to inspect the separate private ABI;
 do not persist its private inputs.
+
+Private outbound authorization uses an **exact quote**, including each hook
+payment. The SDK rechecks the snapshot before record selection, after compliance
+preparation, and after local proving. Any change, including a lower gas-oracle
+price, stops submission and requires reviewing a fresh quote. A saved prepared
+transaction must still match current hook payments before resumption; recovery
+does not change its allowances or rebuild its proof. This policy can require
+another proving attempt on a changing oracle. Before replacing an aborted
+attempt, confirm the saved transaction was never submitted; keep observing any
+submitted or uncertain transaction instead of creating another spend.
 
 
 ## Execute a private outbound transfer

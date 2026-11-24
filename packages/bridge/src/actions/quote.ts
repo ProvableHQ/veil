@@ -1,4 +1,3 @@
-import { hyperlaneRecipient } from '../protocols/hyperlane/privateMint.js'
 import { createTransferId, planSubject, withBridgeContext } from './internal/clientContext.js'
 import { readWithdrawalFee } from '../protocols/xreserve/aleoToEvm.js'
 import { quote as quoteVerulink } from '../protocols/verulink/quote.js'
@@ -16,6 +15,7 @@ import { getRouteStatus } from './getRouteStatus.js'
 import * as aleoHyperlane from '../protocols/hyperlane/aleo.js'
 import * as evmHyperlane from '../protocols/hyperlane/evm.js'
 import * as solanaHyperlane from '../protocols/hyperlane/solana.js'
+import { assertUnusedPrivateMintEncoding, hyperlaneRecipient } from '../protocols/hyperlane/privateMint.js'
 import * as evmToAleoXReserve from '../protocols/xreserve/evmToAleo.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 import { formatDecimalAmount, parseDecimalAmount } from '../utils/units.js'
@@ -55,6 +55,7 @@ export async function quote(
   const transferId = createTransferId()
   const prepared = { ...prepare(registry, params), ...(transferId ? { transferId } : {}) }
   clients = withBridgeContext(clients, 'quote', planSubject(prepared))
+  await assertUnusedPrivateMintEncoding(registry, clients, prepared)
   // Pause flags are read alongside the price so a halted route is reported
   // with the quote rather than discovered at execution.
   const [routeStatus, priced] = await Promise.all([

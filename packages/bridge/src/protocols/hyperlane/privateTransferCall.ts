@@ -77,17 +77,42 @@ export function assertPrivateTransferQuote(registry: BridgeRegistry, plan: Bridg
     : amounts.netAmountAtomic / 10n ** BigInt(sourceAsset.decimals - destinationAsset.decimals)
   const m = route.metadata!
   const hooks = [m.aleoHook === ZERO ? m.aleoMailboxDefaultHook : m.aleoHook, m.aleoMailboxRequiredHook]
-  if (!quote.transferFingerprint || quote.transferFingerprint !== privateTransferFingerprint(registry, plan)
-    || quote.routeId !== route.id || quote.program !== base.program || quote.grossAmountAtomic !== base.amountAtomic
-    || quote.tokenRecordAmountAtomic !== base.amountAtomic || quote.protocolFeeAtomic !== amounts.protocolFeeAtomic
-    || quote.netAmountAtomic !== amounts.netAmountAtomic || quote.destinationAmountAtomic !== destination || destination <= 0n
-    || !Array.isArray(quote.hookPayments) || quote.hookPayments.length !== 2
-    || quote.hookPayments.some((payment, i) => payment.hook !== hooks[i] || typeof payment.paymentMicrocredits !== 'bigint'
-      || payment.paymentMicrocredits < 0n || payment.paymentMicrocredits > MAX_U64)
-    || (hooks[0] === hooks[1] && quote.hookPayments[0]!.paymentMicrocredits !== quote.hookPayments[1]!.paymentMicrocredits)
-    || quote.hookPayments.reduce((sum, payment) => sum + payment.paymentMicrocredits, 0n) !== quote.dispatchCreditsRecordMicrocredits
+  const invalidQuote = () => new BridgeError(
+    'Private Hyperlane quote does not match the original intent, deployment, token fee, or hook funding; quote again',
+  )
+  // Bind the reviewed deployment and transfer intent before checking arithmetic.
+  if (!quote.transferFingerprint
+    || quote.transferFingerprint !== privateTransferFingerprint(registry, plan)
+    || quote.routeId !== route.id
+    || quote.program !== base.program) {
+    throw invalidQuote()
+  }
+  if (quote.grossAmountAtomic !== base.amountAtomic
+    || quote.tokenRecordAmountAtomic !== base.amountAtomic
+    || quote.protocolFeeAtomic !== amounts.protocolFeeAtomic
+    || quote.netAmountAtomic !== amounts.netAmountAtomic
+    || quote.destinationAmountAtomic !== destination
+    || destination <= 0n) {
+    throw invalidQuote()
+  }
+  // Each dispatch invokes both hooks, including a repeated hook address.
+  if (!Array.isArray(quote.hookPayments)
+    || quote.hookPayments.length !== 2
+    || quote.hookPayments.some((payment, i) => (
+      payment.hook !== hooks[i]
+      || typeof payment.paymentMicrocredits !== 'bigint'
+      || payment.paymentMicrocredits < 0n
+      || payment.paymentMicrocredits > MAX_U64
+    ))) {
+    throw invalidQuote()
+  }
+  const repeatedHookMismatch = hooks[0] === hooks[1]
+    && quote.hookPayments[0]!.paymentMicrocredits !== quote.hookPayments[1]!.paymentMicrocredits
+  const dispatchTotal = quote.hookPayments.reduce((sum, payment) => sum + payment.paymentMicrocredits, 0n)
+  if (repeatedHookMismatch
+    || dispatchTotal !== quote.dispatchCreditsRecordMicrocredits
     || quote.dispatchCreditsRecordMicrocredits > MAX_U64) {
-    throw new BridgeError('Private Hyperlane quote does not match the original intent, deployment, token fee, or hook funding; quote again')
+    throw invalidQuote()
   }
 }
 

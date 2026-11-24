@@ -20,12 +20,23 @@ function quoteKey(quote: AleoHyperlanePrivateTransferQuote): string {
 }
 
 /** Selects the smallest eligible local record through the existing core inventory interface. */
-async function selectRecord(client: Client | undefined, program: string, minimum: bigint, owner: string | undefined, network: string): Promise<string> {
+async function selectRecord(
+  client: Client | undefined,
+  program: string,
+  minimum: bigint,
+  owner: string | undefined,
+  network: string,
+  excludedNonce?: string,
+): Promise<string> {
   if (!client || client.account?.type !== 'local' || client.account.address !== owner || client.transport.config.network !== network) {
     throw new BridgeError('Local private Hyperlane selection requires a recordClient for the same signer and network, or explicit token and dispatch records')
   }
   const inventory = await getRecordInventory(client, { asset: { program, recordName: program === 'credits.aleo' ? 'credits' : 'Token' } })
-  const selected = inventory.available.filter(record => record.amount >= minimum && typeof (record.record as Partial<OwnedRecord>).recordPlaintext === 'string')
+  const selected = inventory.available.filter(record => {
+    const plaintext = (record.record as Partial<OwnedRecord>).recordPlaintext
+    return record.amount >= minimum && typeof plaintext === 'string'
+      && (excludedNonce === undefined || parseRecord(plaintext).nonce !== excludedNonce)
+  })
     .sort((a, b) => a.amount < b.amount ? -1 : a.amount > b.amount ? 1 : a.id.localeCompare(b.id))[0]
   if (!selected) throw new BridgeError('No available private Hyperlane record covers the required funding')
   return (selected.record as OwnedRecord).recordPlaintext
@@ -68,6 +79,7 @@ export async function executeAleoHyperlanePrivateTransfer(
   if (privateFee && (wallet.account?.type !== 'local' || !feeRecord)) {
     throw new BridgeError('Private Hyperlane execution fees require a local signer and a distinct explicit feeRecord; wallet accounts use public execution fees')
   }
+  const fee = feeRecord === undefined ? undefined : privateTransferRecord(feeRecord, 'microcredits', 1n, owner)
   if (!params.skipRouteStatus) await assertRouteNotPaused(registry, clients, plan.route.id)
   const approved = quoteKey(quote)
   const assertSigner = () => {
@@ -93,12 +105,14 @@ export async function executeAleoHyperlanePrivateTransfer(
   let dispatchRecord: TransactionInput | undefined = params.dispatchCreditsRecord
   if (wallet.account?.type === 'local') {
     tokenRecord ??= await selectRecord(recordClient, profile.tokenProgram, quote.grossAmountAtomic, owner, profile.route.environment)
-    dispatchRecord ??= await selectRecord(recordClient, 'credits.aleo', quote.dispatchCreditsRecordMicrocredits, owner, profile.route.environment)
+    dispatchRecord ??= await selectRecord(
+      recordClient, 'credits.aleo', quote.dispatchCreditsRecordMicrocredits,
+      owner, profile.route.environment, fee?.nonce,
+    )
     if (typeof tokenRecord !== 'string' || typeof dispatchRecord !== 'string') throw new BridgeError('Local private Hyperlane execution requires record literals, not wallet input requests')
   }
   if (typeof tokenRecord === 'string') privateTransferRecord(tokenRecord, 'amount', quote.grossAmountAtomic, owner)
   if (typeof dispatchRecord === 'string') privateTransferRecord(dispatchRecord, 'microcredits', quote.dispatchCreditsRecordMicrocredits, owner)
-  const fee = feeRecord === undefined ? undefined : privateTransferRecord(feeRecord, 'microcredits', 1n, owner)
   if (fee && [tokenRecord, dispatchRecord].some(record => typeof record === 'string' && parseRecord(record).nonce === fee.nonce)) {
     throw new BridgeError('Private dispatch and execution fee records must be distinct')
   }

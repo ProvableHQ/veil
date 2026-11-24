@@ -134,6 +134,26 @@ describe('private testnet ETH CLI', () => {
     expect(mocks.execute).toHaveBeenCalledTimes(1)
   })
 
+  it('rebroadcasts a saved claim without requiring a secret or generating another proof', async () => {
+    mocks.execute.mockRejectedValueOnce(new Error('Source timeout'))
+    await expect(runTestnetEthExample('mint', { statePath, execute: true })).rejects.toThrow()
+    const state = read()
+    delete state.secretNonce
+    state.claimAttempted = true
+    writeFileSync(statePath, JSON.stringify(state))
+    const plan = mintPlan()
+    const prepared = receipt(plan, 'DESTINATION_ACTION_REQUIRED', {
+      protocolState: { routeId: plan.route.id, preparedDestinationTransaction: '{"encrypted":"claim"}' },
+    })
+    mocks.recover.mockResolvedValue({ next: 'complete', plan, receipt: prepared })
+    mocks.complete.mockResolvedValue({ receipt: receipt(plan, 'DESTINATION_CONFIRMING') })
+    mocks.wait.mockResolvedValue({ next: 'done', plan, receipt: receipt(plan, 'COMPLETED') })
+    await runTestnetEthExample('claim', { statePath, execute: true })
+    expect(mocks.complete).toHaveBeenCalledWith(expect.not.objectContaining({ hyperlane: expect.anything() }))
+    expect(mocks.proof).not.toHaveBeenCalled()
+    expect(mocks.execute).toHaveBeenCalledTimes(1)
+  })
+
   it('executes withdrawal through the private quote and refuses a blind retry after an unknown source outcome', async () => {
     const quote = { protocolFeeAtomic: 2500000000000n, amountOut: '0.0009975', dispatchCreditsRecordMicrocredits: 1000n }
     mocks.privateQuote.mockResolvedValue(quote)

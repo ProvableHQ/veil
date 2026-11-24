@@ -31,7 +31,7 @@ function fixture() {
     inputs: [{ type: 'public', id: 'commitment', value: `[${limbs[0]}u128, ${limbs[1]}u128]` },
       ...[1, 2, 3, 4].map(i => ({ type: 'private', id: `input${i}`, value: `ciphertext1value${i}` }))], outputs: [],
   }] } } as unknown as Transaction
-  const state = { status: 'not_found', balance: '100u128', loseResponse: false, duplicate: false }
+  const state = { status: 'not_found', balance: '100u128', loseResponse: false, duplicate: false, returnedId: TX }
   const sent: string[] = []
   const request = vi.fn(async ({ method, params }: { method: string; params: Record<string, unknown> }) => {
     if (method === 'getMappingValue' && params.mapping === 'claimable') return state.balance
@@ -41,7 +41,7 @@ function fixture() {
       sent.push(params.transaction as string)
       if (state.loseResponse) throw new Error('Submission response lost')
       if (state.duplicate) throw new DuplicateTransactionError(TX)
-      return TX
+      return state.returnedId
     }
     throw new Error('Transaction not found')
   })
@@ -116,11 +116,54 @@ describe('private Hyperlane claim checkpoints', () => {
       onProgress: event => { if (event.type === 'transaction-submitted') throw new Error('Reporting failed') },
     }).catch(error => error)
     expect(error).toBeInstanceOf(PrivateHyperlaneSubmissionError)
-    expect(error.checkpoint.destination).toEqual({ transactionId: TX })
-    expect(f.saved().destination).toEqual({ transactionId: TX })
+    expect(error.checkpoint.destination).toMatchObject({ transactionId: TX, preparedTransaction: { serializedTransaction: JSON.stringify(f.transaction) } })
+    expect(f.saved().destination).toEqual(error.checkpoint.destination)
     f.state.status = 'accepted'
     f.state.balance = '0u128'
     expect((await recover(registry, f.clients, fetch, { checkpoint: f.saved() })).next).toBe('done')
+  })
+
+  it('rebroadcasts the same bytes after a successful broadcast is dropped, retaining them until acceptance', async () => {
+    const f = fixture()
+    await complete(registry, f.clients, f.params)
+    expect(f.saved().destination).toEqual({
+      transactionId: TX,
+      preparedTransaction: { transactionId: TX, serializedTransaction: JSON.stringify(f.transaction) },
+    })
+    const clients = { aleo: { family: 'aleo' as const, publicClient: f.clients.aleo.publicClient } }
+    const progress = await recover(registry, clients, fetch, { checkpoint: f.saved() })
+    expect(progress.next).toBe('complete')
+    const resubmitted = await complete(registry, clients, { progress, skipRouteStatus: true })
+    const checkpoint = createBridgeCheckpoint(plan, resubmitted.receipt)
+    expect(checkpoint.destination?.preparedTransaction).toEqual(f.saved().destination?.preparedTransaction)
+    expect(f.sent).toEqual([JSON.stringify(f.transaction), JSON.stringify(f.transaction)])
+    expect(f.buildTransaction).toHaveBeenCalledOnce()
+    f.state.status = 'accepted'
+    const accepted = await recover(registry, clients, fetch, { checkpoint })
+    expect(accepted.next).toBe('done')
+    expect(createBridgeCheckpoint(plan, accepted.receipt).destination).toEqual({ transactionId: TX })
+  })
+
+  it.each(['fresh', 'rebroadcast'])('preserves canonical claim recovery after a conflicting %s broadcast id', async path => {
+    const f = fixture()
+    let progress
+    if (path === 'rebroadcast') {
+      f.state.loseResponse = true
+      await expect(complete(registry, f.clients, f.params)).rejects.toThrow('Submission response lost')
+      progress = await recover(registry, f.clients, fetch, { checkpoint: f.saved() })
+      f.state.loseResponse = false
+    }
+    f.state.returnedId = 'at1conflicting'
+    const error = await complete(registry, f.clients, progress
+      ? { progress, skipRouteStatus: true }
+      : { ...f.params, onCheckpoint: undefined }).catch(error => error)
+    expect(error).toBeInstanceOf(PrivateHyperlaneSubmissionError)
+    expect(error.receipt).toMatchObject({ destinationTxId: TX, protocolState: { reportedDestinationTxId: 'at1conflicting' } })
+    expect(error.checkpoint.destination).toEqual({ transactionId: TX,
+      preparedTransaction: { transactionId: TX, serializedTransaction: JSON.stringify(f.transaction) },
+    })
+    f.state.status = 'accepted'
+    expect((await recover(registry, f.clients, fetch, { checkpoint: error.checkpoint })).next).toBe('done')
   })
 
   it('discards rejected prepared bytes before authorizing a new claim', async () => {
