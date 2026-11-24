@@ -34,7 +34,7 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@provablehq/veil-core": "workspace:>=0.16.2 <1.0.0"
+    "@provablehq/veil-core": "workspace:>=0.17.0 <1.0.0"
   },
   "keywords": [
     "aleo",
