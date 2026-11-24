@@ -62,7 +62,7 @@
     "@provablehq/veil-core": "workspace:*"
   },
   "devDependencies": {
-    "@provablehq/sdk": "^0.13.0",
+    "@provablehq/sdk": "^0.13.1",
     "@provablehq/veil-codegen": "workspace:*",
     "@provablehq/veil-aleo-sdk": "workspace:*",
     "openapi-typescript": "^7.13.0"
