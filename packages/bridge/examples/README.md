@@ -9,9 +9,14 @@ routes. Every transfer follows the same lifecycle:
 4. Wait for destination delivery.
 5. Resume or complete a transfer only when the returned progress requests it.
 
-The scripts in this directory run against mainnet. Their default transfer
+The route scripts below run against mainnet. Their default transfer
 amounts are listed below, and they remain read-only unless `EXECUTE_BRIDGE`
 contains the exact acknowledgement shown below.
+
+For Sepolia ETH ↔ Aleo testnet **private minting and private withdrawal**, follow
+the [complete testnet ETH example](./testnet-eth.md). It includes its own reviewed
+testnet registry, local signing clients, saved claim identity, and recovery
+commands. It uses a separate testnet execution acknowledgement.
 
 For Privy or Dynamic server wallets, start with the
 [server-wallet configuration guide](./remote-wallets/README.md). Its examples

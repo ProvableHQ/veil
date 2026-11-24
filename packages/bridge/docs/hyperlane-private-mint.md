@@ -134,6 +134,10 @@ identity backup and durable checkpoint storage.
 See [the executable example](../examples/private-hyperlane.ts). It quotes by
 default and requires `execute: true` to move funds.
 
+For a complete local-key Sepolia ETH mint and private withdrawal, follow the
+[testnet ETH walkthrough](../examples/testnet-eth.md). It supplies the reviewed
+testnet registry, signing clients, persistent claim identity, and recovery commands.
+
 
 ## Discover encodings by their existing counters
 

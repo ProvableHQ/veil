@@ -64,7 +64,7 @@
     "dist",
     "docs/*.md",
     "examples/*.ts",
-    "examples/README.md",
+    "examples/*.md",
     "examples/tsconfig.json",
     "skills/*.md",
     "examples/remote-wallets"
