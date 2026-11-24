@@ -41,6 +41,40 @@ install.
 `shield-swap` on its own lists the subcommands, and every subcommand takes
 `--help` for its own flags.
 
+## Version and updates
+
+Print the installed CLI version or check for a newer stable release:
+
+```sh
+shield-swap version             # also --version or -v; works offline
+shield-swap version --json
+shield-swap update --check      # checks npm without installing
+```
+
+For a global npm installation, install the latest stable release with:
+
+```sh
+shield-swap update
+```
+
+The updater checks npm's configured registry and updates only the running global
+npm installation. An equal or newer installed version is left in place. Both
+commands work before account setup and support `--json`; they do not use trading
+credentials or require `--execute`. Update failures return a nonzero exit code.
+
+Project installs, linked source checkouts, and other package managers receive
+manual update instructions. Update a project dependency from its project root
+with the package manager used to install it:
+
+```sh
+npm install --save-dev @provablehq/shield-swap-cli@latest
+# or: pnpm add -D @provablehq/shield-swap-cli@latest
+# or: yarn add -D @provablehq/shield-swap-cli@latest
+```
+
+For a source checkout, update the checkout and rebuild if running from `dist`.
+`update --check` works for all installation types and requires npm on `PATH`.
+
 ## Running it from the Veil repo
 
 No build step. `tsx` honours the root tsconfig's `paths`, so the SDK resolves
