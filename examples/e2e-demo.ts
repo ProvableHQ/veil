@@ -48,6 +48,8 @@ describe('Wallet freezelist proof setup', () => {
   it('encodes a wallet-issued Hyperlane commitment for the private claim ABI', () => {
     // The first half is the low limb; each half is little-endian. A reviewed
     // private route and separate claim grants are required before execution.
+    // Persist complete() checkpoints to recover claim ids and reuse proved
+    // transaction bytes if the submission response is lost.
     const addressEncoding = { commitmentHex: `01${'00'.repeat(15)}02${'00'.repeat(15)}` }
     expect(hyperlaneCommitmentToLimbs(addressEncoding)).toEqual([1n, 2n])
   })

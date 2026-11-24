@@ -107,14 +107,20 @@ a scalar and recipient proof literal. The SDK verifies that the scalar and
 recipient reproduce the original BHP256 commitment before submission. No scalar
 is defaulted, issued, or stored automatically for Hyperlane.
 
-Save every `onCheckpoint` value. Checkpoints retain the encoding with the intent
-and submitted source/destination transaction ids; they exclude scalar nonces,
-derived-input requests, and proofs. `recover({ checkpoint })` restores the
+Save every `onCheckpoint` value. Checkpoints retain the encoding with the intent,
+submitted source/destination transaction ids, and encrypted proved claim transactions
+before local broadcast. They exclude scalar nonces, derived-input requests, and
+plaintext compliance proofs. `recover({ checkpoint })` restores the
 original encoding and checks the Aleo mapping before requesting source history.
 A checkpoint containing only the original intent and reviewed route can recover
 a funded private claim. Source clients and Circle's attestation API are not
-required for this path. Submitted destination claim ids are checked first;
-unknown or pending transactions never authorize another claim.
+required for this path. Prepared and submitted destination claim ids are checked
+first, so an accepted claim completes recovery even when `claimable` is zero.
+Pending claims remain under observation. When a prepared claim is not found,
+`complete` can rebroadcast its exact saved bytes without a wallet or another
+proof. Unknown submissions without saved bytes never authorize another claim.
+If a callback fails after submission, `PrivateHyperlaneSubmissionError.checkpoint`
+preserves the submitted claim id for recovery.
 
 A present zero balance retains the encoding as recovery evidence and prevents
 source resubmission. `resume` also rereads the mapping when a destination client

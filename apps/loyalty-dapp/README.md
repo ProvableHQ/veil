@@ -44,7 +44,9 @@ Private Hyperlane recovery checks the destination warp route's `claimable` mappi
 A funded encoding can be recovered without source transaction or message ids;
 bounded counter scans re-derive existing encodings in the wallet host or local
 account and query Aleo directly. Zero balance is distinct from an absent entry
-and does not prove completion. See the bridge guide above for discovery and retry.
+and does not prove completion. Persist every claim checkpoint: recovery checks
+saved claim ids before balances, and `complete` can resend the same proved bytes
+after an interrupted submission. See the bridge guide above for discovery and retry.
 
 Private outbound Hyperlane fee inspection uses
 `hyperlane.aleo.quotePrivateTransfer` with reviewed private ABI and fee-mapping

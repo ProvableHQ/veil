@@ -46,6 +46,8 @@ export async function runPrivateHyperlaneExample(
   if (progress.next === 'complete') {
     // The original wallet resolves the secret at input three and recipient
     // proofs at input four; the application stores neither private input.
+    // Save each claim checkpoint so recovery can observe the transaction or
+    // rebroadcast its encrypted proved bytes after an interrupted submission.
     const claim = await bridge.complete({ progress, onCheckpoint: options.save })
     progress = await bridge.wait({ progress: { next: 'wait', plan: quote.plan, receipt: claim.receipt } })
   }
@@ -59,7 +61,7 @@ export async function runPrivateHyperlaneExample(
  * A funded claim needs only the checkpoint's original intent and reviewed route;
  * source transaction and message ids are optional. The issuing wallet retains the secret.
  * @param bridge Supplies the reviewed registry and destination Aleo network access.
- * @param checkpoint Supplies the original intent, encoding, route, and any known submitted claim id.
+ * @param checkpoint Supplies the original intent, encoding, route, and any prepared claim bytes or submitted claim id.
  * @returns Progress ready for explicit completion, waiting for funds, or observing a submitted claim.
  * @throws Error When the checkpoint, route, or Aleo mapping read is invalid.
  * @example const progress = await recoverPrivateHyperlaneExample(bridge, checkpoint)
@@ -68,8 +70,8 @@ export async function recoverPrivateHyperlaneExample(bridge: BridgeClient, check
   if (checkpoint.intent.bridgeProtocol !== 'hyperlane' || !checkpoint.intent.hyperlane) {
     throw new Error('Supply the original private Hyperlane intent and encoding')
   }
-  // Do not requote or repeat a source transfer. Aleo claimable state determines
-  // readiness; the caller explicitly authorizes complete() only when appropriate.
+  // Do not requote or repeat a source transfer. Recovery checks saved claim ids
+  // before claimable state; complete() reuses prepared bytes when available.
   return bridge.recover({ checkpoint })
 }
 

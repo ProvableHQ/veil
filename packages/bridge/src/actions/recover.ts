@@ -267,24 +267,29 @@ async function recoverPrivateClaimFromMapping(
   const checkpoint = params.checkpoint
   hyperlaneRecipient(registry, plan)
   const destination = checkpoint.destination
-  if (destination?.preparedTransaction || (destination && (typeof destination.transactionId !== 'string' || !destination.transactionId))) {
-    throw new BridgeError('Hyperlane private recovery requires a submitted destination transaction id')
+  const prepared = destination?.preparedTransaction
+  if ((destination && !prepared && (typeof destination.transactionId !== 'string' || !destination.transactionId))
+    || (prepared && (typeof prepared.transactionId !== 'string' || !prepared.transactionId
+      || typeof prepared.serializedTransaction !== 'string' || !prepared.serializedTransaction
+      || (destination?.transactionId !== undefined && destination.transactionId !== prepared.transactionId)))) {
+    throw new BridgeError('Hyperlane private recovery requires a valid prepared or submitted destination transaction id')
   }
   const approvals = checkpoint.source?.approvalTransactionIds
   if (approvals !== undefined && (!Array.isArray(approvals) || approvals.some(id => typeof id !== 'string'))) {
     throw new BridgeError('Hyperlane checkpoint contains invalid approval transaction identifiers')
   }
   const receipt: BridgeReceipt = {
-    id: destination?.transactionId ?? checkpoint.source?.transactionId ?? plan.hyperlane!.addressEncoding.commitmentHex,
+    id: destination?.transactionId ?? prepared?.transactionId ?? checkpoint.source?.transactionId ?? plan.hyperlane!.addressEncoding.commitmentHex,
     protocol: 'hyperlane', status: 'DELIVERY_PENDING',
     ...(checkpoint.source?.transactionId ? { sourceTxId: checkpoint.source.transactionId } : {}),
-    protocolState: { routeId: plan.route.id, ...(approvals ? { approvalTxIds: [...approvals] } : {}) },
+    protocolState: { routeId: plan.route.id, ...(approvals ? { approvalTxIds: [...approvals] } : {}),
+      ...(prepared ? { preparedDestinationTransaction: prepared.serializedTransaction } : {}) },
   }
   params.signal?.throwIfAborted()
-  if (destination?.transactionId) {
+  if (destination?.transactionId || prepared) {
     // Observe an existing claim before looking for spendable funds, so an
     // unresolved transaction can never trigger a duplicate claim or dispatch.
-    return privateClaimStatus(registry, clients, plan, { ...receipt, status: 'DESTINATION_CONFIRMING', destinationTxId: destination.transactionId })
+    return privateClaimStatus(registry, clients, plan, { ...receipt, status: 'DESTINATION_CONFIRMING', destinationTxId: destination?.transactionId ?? prepared!.transactionId })
   }
   const claimable = await readHyperlaneClaimableAmount(registry, clients, {
     routeId: plan.route.id, addressEncoding: plan.hyperlane!.addressEncoding,

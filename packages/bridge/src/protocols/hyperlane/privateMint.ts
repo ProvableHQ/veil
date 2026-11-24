@@ -1,7 +1,7 @@
-import { readContract, transactionStatus, type AlgorithmGrant, type TransactionInput } from '@provablehq/veil-core'
+import { classifyBroadcastError, DuplicateTransactionError, readContract, transactionStatus, type AlgorithmGrant, type Transaction, type TransactionInput } from '@provablehq/veil-core'
 import { resolveTransferRoute } from '../../actions/internal/resolveTransferRoute.js'
 import { requireAleoClient, requireAleoClientWithWallet, type BridgeChainClients } from '../../connections/resolve.js'
-import { BridgeError } from '../../errors/bridgeErrors.js'
+import { BridgeError, PrivateHyperlaneSubmissionError } from '../../errors/bridgeErrors.js'
 import type { CompleteParameters } from '../../types/actions.js'
 import type { BridgePlan, BridgeReceipt, BridgeRegistry, ProtocolBridgeRoute } from '../../types/protocol.js'
 import { aleoAddressToBytes32, deriveXReservePrivateMintAddressCommitment as deriveAddressCommitment } from '../../utils/xreserve.js'
@@ -165,6 +165,32 @@ export function hyperlanePrivateClaimGrants(options: { registry: BridgeRegistry;
   ]
 }
 
+/** Validates saved claim bytes against their transaction id, reviewed program, and public commitment. */
+function preparedPrivateClaim(registry: BridgeRegistry, plan: BridgePlan, receipt: BridgeReceipt): Transaction | undefined {
+  const serialized = receipt.protocolState.preparedDestinationTransaction
+  if (serialized === undefined) return undefined
+  let transaction: Transaction
+  try {
+    if (typeof serialized !== 'string' || !serialized) throw new Error()
+    transaction = JSON.parse(serialized) as Transaction
+  } catch {
+    throw new BridgeError('Prepared Hyperlane claim contains an invalid serialized transaction')
+  }
+  const { program } = privateMintMetadata(resolveTransferRoute(registry, plan).route)
+  const [lo, hi] = hyperlaneCommitmentToLimbs(plan.hyperlane!.addressEncoding)
+  const transitions = transaction?.execution?.transitions
+  const claims = Array.isArray(transitions) ? transitions.filter(t => t.program === program && t.function === 'claim_private') : []
+  const inputs = claims[0]?.inputs
+  if (transaction?.type !== 'execute' || !transaction.id || transaction.id !== receipt.id
+    || (receipt.destinationTxId !== undefined && receipt.destinationTxId !== transaction.id)
+    || claims.length !== 1 || inputs?.length !== 5 || inputs[0]?.type !== 'public'
+    || inputs[0].value?.replace(/\s/g, '') !== `[${lo}u128,${hi}u128]`
+    || inputs.slice(1).some(input => input.type !== 'private' || !input.value?.startsWith('ciphertext1'))) {
+    throw new BridgeError('Prepared Hyperlane claim does not match its transaction id or reviewed claim inputs')
+  }
+  return transaction
+}
+
 /**
  * Checks destination claim confirmation or exposes a fresh wallet authorization boundary.
  * Reads Aleo claimable balance or transaction state without requesting a signature.
@@ -180,13 +206,21 @@ export async function privateClaimStatus(registry: BridgeRegistry, clients: Brid
   validatePrivateClaimPlan(registry, plan)
   const { destinationChain, destinationAsset } = resolveTransferRoute(registry, plan)
   const client = requireAleoClient(registry, clients, destinationChain.id)
-  const { nextAction: _nextAction, ...rest } = receipt
-  if (receipt.status === 'DESTINATION_CONFIRMING') {
-    if (!receipt.destinationTxId) throw new BridgeError('Hyperlane claim receipt is missing its destination transaction id')
-    const result = await transactionStatus(client.publicClient, { transactionId: receipt.destinationTxId })
-    if (result.status === 'accepted') return { ...rest, status: 'COMPLETED' }
-    // Pending or unknown submissions must resolve before another claim is authorized.
-    if (result.status !== 'rejected') return receipt
+  const prepared = preparedPrivateClaim(registry, plan, receipt)
+  let { nextAction: _nextAction, ...rest } = receipt
+  if (receipt.status === 'DESTINATION_CONFIRMING' || prepared) {
+    const transactionId = receipt.destinationTxId ?? prepared?.id
+    if (!transactionId) throw new BridgeError('Hyperlane claim receipt is missing its destination transaction id')
+    const result = await transactionStatus(client.publicClient, { transactionId })
+    const { preparedDestinationTransaction: _prepared, ...protocolState } = rest.protocolState
+    if (result.status === 'accepted') return { ...rest, protocolState, destinationTxId: transactionId, status: 'COMPLETED' }
+    // Unknown prepared claims may only rebroadcast their saved bytes. Pending
+    // claims and unknown submissions without bytes cannot authorize another claim.
+    if (result.status === 'not_found' && prepared) return { ...rest, status: 'DESTINATION_ACTION_REQUIRED' }
+    if (result.status !== 'rejected') return prepared
+      ? { ...rest, status: 'DESTINATION_CONFIRMING', destinationTxId: transactionId }
+      : receipt
+    rest = { ...rest, protocolState, destinationTxId: undefined }
   }
   // The destination balance is authoritative even when source history or a message id is unavailable.
   const amount = parseDecimalAmount(plan.amountIn, destinationAsset.decimals)
@@ -201,6 +235,7 @@ export async function privateClaimStatus(registry: BridgeRegistry, clients: Brid
 /**
  * Submits the reviewed five-input private claim after rechecking available funds.
  * Requests wallet authorization, proves, and broadcasts an Aleo transaction that spends destination gas.
+ * Saves proved bytes before local broadcast and reuses them after an interrupted submission.
  * @param registry Supplies the reviewed claim program and recipient freezelist.
  * @param clients Supplies destination network access and the issuing wallet or local signer.
  * @param plan Supplies the original commitment, recipient, and destination amount.
@@ -217,6 +252,46 @@ export async function completePrivateClaim(
   const { route, destinationChain, destinationAsset } = resolveTransferRoute(registry, plan)
   if (receipt.protocol !== 'hyperlane' || receipt.protocolState.routeId !== route.id
     || receipt.status !== 'DESTINATION_ACTION_REQUIRED' || receipt.nextAction !== undefined) throw new BridgeError('Hyperlane receipt has no private claim ready')
+  const prepared = preparedPrivateClaim(registry, plan, receipt)
+  const { nextAction: _nextAction, ...rest } = receipt
+  const { preparedDestinationTransaction: _prepared, ...protocolState } = receipt.protocolState
+  let submitted: BridgeReceipt | undefined
+  let preparedId = prepared?.id
+  const saveSubmitted = async (transactionId: string) => {
+    if (!transactionId || (preparedId !== undefined && preparedId !== transactionId)
+      || (submitted && submitted.destinationTxId !== transactionId)) throw new BridgeError('Hyperlane claim returned an empty or conflicting transaction id')
+    if (submitted) return
+    submitted = { ...rest, protocolState, status: 'DESTINATION_CONFIRMING', destinationTxId: transactionId }
+    await params.onCheckpoint?.(createBridgeCheckpoint(plan, submitted))
+  }
+  if (prepared) {
+    // Recheck a stale recovery result before broadcasting; no wallet or private
+    // inputs are needed to observe or submit an already proved claim.
+    const observed = await privateClaimStatus(registry, clients, plan, receipt)
+    if (observed.status === 'COMPLETED' || observed.status === 'DESTINATION_CONFIRMING') {
+      await params.onCheckpoint?.(createBridgeCheckpoint(plan, observed))
+      return { transactionId: prepared.id, receipt: observed }
+    }
+    if (!observed.protocolState.preparedDestinationTransaction) throw new BridgeError('Prepared Hyperlane claim was rejected; recover before authorizing another claim')
+    try {
+      try {
+        const transactionId = await requireAleoClient(registry, clients, destinationChain.id).publicClient.request({
+          method: 'sendTransaction', params: { transaction: receipt.protocolState.preparedDestinationTransaction as string },
+        })
+        if (transactionId !== prepared.id) throw new BridgeError('Prepared Hyperlane claim broadcast returned a different transaction id')
+      } catch (error) {
+        if (error instanceof BridgeError) throw error
+        const classified = classifyBroadcastError(error, prepared.id)
+        if (!(classified instanceof DuplicateTransactionError)) throw classified
+      }
+      await saveSubmitted(prepared.id)
+      await params.onProgress?.({ type: 'transaction-submitted', transactionId: prepared.id })
+    } catch (cause) {
+      if (submitted) throw new PrivateHyperlaneSubmissionError(submitted, createBridgeCheckpoint(plan, submitted), cause)
+      throw cause
+    }
+    return { transactionId: prepared.id, receipt: submitted! }
+  }
   const fresh = await privateClaimStatus(registry, clients, plan, { ...receipt, status: 'DELIVERY_PENDING' })
   if (fresh.status !== 'DESTINATION_ACTION_REQUIRED') throw new BridgeError('Hyperlane private claim is not funded')
   const { program, freezelistProgram } = privateMintMetadata(route)
@@ -243,12 +318,29 @@ export async function completePrivateClaim(
       freezelistProgram: { type: 'string', value: freezelistProgram }, address: { type: 'address', value: plan.recipient },
     } },
   ]
-  const transactionId = await wallet.executeTransaction({ program, function: 'claim_private', inputs,
-    privateFee: params.privateFee ?? false, onProgress: params.onProgress,
-  })
-  if (!transactionId) throw new BridgeError('Aleo wallet returned an empty private claim transaction id')
-  const { nextAction: _nextAction, ...rest } = receipt
-  const submitted: BridgeReceipt = { ...rest, status: 'DESTINATION_CONFIRMING', destinationTxId: transactionId }
-  await params.onCheckpoint?.(createBridgeCheckpoint(plan, submitted))
-  return { transactionId, receipt: submitted }
+  try {
+    const transactionId = await wallet.executeTransaction({ program, function: 'claim_private', inputs,
+      privateFee: params.privateFee ?? false,
+      onProgress: async event => {
+        if (event.type === 'transaction-prepared') {
+          const pending: BridgeReceipt = { ...rest, id: event.transactionId, destinationTxId: undefined,
+            status: 'DESTINATION_CONFIRMING', protocolState: { ...protocolState, preparedDestinationTransaction: JSON.stringify(event.transaction) } }
+          preparedPrivateClaim(registry, plan, pending)
+          preparedId = event.transactionId
+          // Persist encrypted transaction bytes before broadcast. Reporting gets
+          // a copy so it cannot alter the proved transaction retained by the wallet.
+          await params.onCheckpoint?.(createBridgeCheckpoint(plan, pending))
+          await params.onProgress?.({ ...event, transaction: JSON.parse(JSON.stringify(event.transaction)) as Transaction })
+          return
+        }
+        if (event.type === 'transaction-submitted') await saveSubmitted(event.transactionId)
+        await params.onProgress?.(event)
+      },
+    })
+    await saveSubmitted(transactionId)
+    return { transactionId, receipt: submitted! }
+  } catch (cause) {
+    if (submitted) throw new PrivateHyperlaneSubmissionError(submitted, createBridgeCheckpoint(plan, submitted), cause)
+    throw cause
+  }
 }

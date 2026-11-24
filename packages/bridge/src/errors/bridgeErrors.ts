@@ -52,9 +52,9 @@ export function describePauseSource(source: BridgeRouteStatusSource): string {
 }
 
 /**
- * Preserves a submitted private Hyperlane transfer when a later callback or tracking step fails.
+ * Preserves a submitted private Hyperlane transfer or claim when a later callback or tracking step fails.
  * The attached state contains public recovery data and no private record inputs.
- * @property receipt Identifies the submitted source transaction that must be observed before retrying.
+ * @property receipt Identifies the submitted source or destination transaction that must be observed before retrying.
  * @property checkpoint Restores the submitted transfer through bridge.recover.
  * @example
  * if (error instanceof PrivateHyperlaneSubmissionError) {
@@ -67,7 +67,7 @@ export class PrivateHyperlaneSubmissionError extends BridgeError {
 
   /**
    * Captures the public state of an already submitted private transfer.
-   * @param receipt Supplies the submitted source transaction and net destination verification.
+   * @param receipt Supplies the submitted source or destination transaction and its recovery state.
    * @param checkpoint Supplies compact public recovery state.
    * @param cause Supplies the callback or tracking failure; no network access occurs.
    */
