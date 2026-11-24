@@ -1,5 +1,16 @@
 # @provablehq/veil-aleo-react-hooks
 
+## 0.17.0
+
+### Patch Changes
+
+- fa90fb9: Update the wallet adapters to core 1.3.1, React 1.5.1, Shield 1.6.0, and
+  Leo/Puzzle/Fox 1.1.5. Align their companion packages with `@provablehq/aleo-types`
+  1.3.0 and `@provablehq/aleo-wallet-standard` 1.6.0.
+- Updated dependencies [fa90fb9]
+  - @provablehq/veil-aleo-wallet-adapter@0.17.0
+  - @provablehq/veil-core@0.17.0
+
 ## 0.16.2
 
 ### Patch Changes
