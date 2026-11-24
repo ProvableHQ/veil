@@ -32,7 +32,7 @@ if (!name || name === '--help' || name === '-h' || name === 'help') {
   process.exit(0)
 }
 
-const command = COMMANDS[name]
+const command = COMMANDS[name === '--version' || name === '-v' ? 'version' : name]
 if (!command) {
   // Suggest rather than just reject: the subcommand names are close enough to
   // each other that a near miss is far more likely than an invented one.

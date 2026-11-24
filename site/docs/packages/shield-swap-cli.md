@@ -26,6 +26,25 @@ See the [CLI reference and examples](https://github.com/ProvableHQ/veil/blob/mai
 for commands and configuration. For an application that embeds trading,
 use the [Shield Swap SDK](./shield-swap) instead.
 
+## Version and updates
+
+`shield-swap version` prints the installed version without network access;
+`--version` and `-v` are aliases. Check for a newer stable release or update a
+global npm installation:
+
+```sh
+shield-swap version
+shield-swap update --check
+shield-swap update
+```
+
+Both commands support `--json` and work before account setup. `update` uses
+npm's configured registry and leaves an equal or newer installed version in
+place. Project installs, linked source checkouts, and other package managers
+receive manual update instructions. For a project installed with npm, run
+`npm install --save-dev @provablehq/shield-swap-cli@latest` from the project root.
+`update --check` works for any installation type with npm on `PATH`.
+
 ## Accounts
 
 A saved Aleo account lets Shield Swap commands and Veil scripts use the same

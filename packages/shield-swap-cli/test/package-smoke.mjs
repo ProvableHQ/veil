@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -9,6 +9,19 @@ import assert from 'node:assert/strict'
 
 const exec = promisify(execFile)
 const binary = fileURLToPath(new URL('../dist/index.js', import.meta.url))
+
+test('built binary reports its package version and exposes update help without setup', async () => {
+  const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
+  for (const command of ['version', '--version', '-v']) {
+    const result = await exec(process.execPath, [binary, command])
+    assert.equal(result.stdout.trim(), pkg.version)
+    assert.equal(result.stderr, '')
+  }
+  const json = await exec(process.execPath, [binary, 'version', '--json'])
+  assert.deepEqual(JSON.parse(json.stdout), { package: pkg.name, version: pkg.version })
+  const update = await exec(process.execPath, [binary, 'update', '--help'])
+  assert.match(update.stdout, /--check/)
+})
 
 test('built binary lists inventory and loads its help', async () => {
   const top = await exec(process.execPath, [binary, '--help'])

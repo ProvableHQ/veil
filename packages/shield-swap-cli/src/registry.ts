@@ -87,6 +87,14 @@ export const COMMANDS: Record<string, Command> = {
     summary: 'The whole liquidity lifecycle in one run — mint through burn.',
     load: () => import('./commands/liquidity-e2e.js'),
   },
+  version: {
+    summary: 'Print the installed CLI version.',
+    load: () => import('./commands/version.js'),
+  },
+  update: {
+    summary: 'Update a global npm install, or check for a new release.',
+    load: () => import('./commands/update.js'),
+  },
 }
 
 /**
@@ -105,12 +113,16 @@ ${lines.join('\n')}
 
 Run \`shield-swap <command> --help\` for a command's own flags.
 
-Common to every command below setup:
+Trading command options:
   --network <testnet|mainnet>   default testnet; mainnet is never implicit
   --execute                     actually submit; without it, plans and stops
   --json                        one machine-readable object, nothing else
   --no-color                    plain output; NO_COLOR and a non-TTY do this too
   -h, --help                    this text, or a command's own when it follows one
+
+Version: shield-swap version (also --version or -v).
+Update: shield-swap update; use --check to check without installing.
+Both accept --json and need no account or network selection.
 
 setup takes --network and its own options, but neither --execute nor --json:
 it is check-then-act throughout and reports progress as text. account takes
