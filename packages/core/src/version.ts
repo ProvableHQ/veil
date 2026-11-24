@@ -13,4 +13,4 @@
  *   clientHeader: `my-dapp/1.2 veil-core/${version}`,
  * })
  */
-export const version = '0.16.2'
+export const version = '0.17.0'

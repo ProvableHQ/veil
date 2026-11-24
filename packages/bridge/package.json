@@ -1,6 +1,6 @@
 {
   "name": "@provablehq/aleo-bridge-sdk",
-  "version": "0.16.2",
+  "version": "0.17.0",
   "description": "Protocol bridge client for Circle xReserve and Hyperlane routes connected to Aleo.",
   "license": "MIT",
   "repository": {
@@ -102,7 +102,7 @@
     "@dynamic-labs-wallet/node-evm": "1.1.24",
     "@dynamic-labs-wallet/node-svm": "1.1.24",
     "@privy-io/node": "0.35.0",
-    "@provablehq/sdk": "^0.13.0",
+    "@provablehq/sdk": "^0.13.1",
     "@provablehq/veil-aleo-sdk": "workspace:*",
     "@solana/kit": "^8.0.0",
     "tsx": "^4.21.0"

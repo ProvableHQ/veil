@@ -1,6 +1,6 @@
 {
   "name": "@provablehq/veil-aleo-sdk",
-  "version": "0.16.2",
+  "version": "0.17.0",
   "description": "Local signing and proving for the Veil Aleo SDK, backed by the Provable SDK.",
   "license": "MIT",
   "repository": {
@@ -42,7 +42,7 @@
   },
   "dependencies": {
     "@noble/hashes": "^1.7.2",
-    "@provablehq/sdk": "^0.13.0",
+    "@provablehq/sdk": "^0.13.1",
     "@scure/bip39": "^1.4.0"
   },
   "devDependencies": {
